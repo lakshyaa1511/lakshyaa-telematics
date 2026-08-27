@@ -1,0 +1,223 @@
+{% extends "base.html" %}
+{% block title %}History - {{ device.name }}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+  <h4>📍 History – {{ device.name }}</h4>
+
+  <!-- Date range -->
+  <div class="row g-2 mb-3">
+    <div class="col-md-4">
+      <input type="datetime-local" id="fromInput" class="form-control">
+    </div>
+    <div class="col-md-4">
+      <input type="datetime-local" id="toInput" class="form-control">
+    </div>
+    <div class="col-md-4">
+      <button id="loadBtn" class="btn btn-primary w-100">Load</button>
+    </div>
+  </div>
+
+  <!-- Controls -->
+  <div class="row mb-3 align-items-center">
+    <div class="col-md-6 d-flex gap-2">
+      <button id="playBtn" class="btn btn-success">▶ Play</button>
+      <button id="pauseBtn" class="btn btn-warning">⏸ Pause</button>
+      <button id="resetBtn" class="btn btn-danger">⏹ Reset</button>
+    </div>
+
+    <div class="col-md-6">
+      <label class="form-label mb-1">⏩ Speed</label>
+      <input type="range" id="speedSlider" min="50" max="1000" step="50" value="300" class="form-range">
+    </div>
+  </div>
+
+  <!-- Summary -->
+  <div class="alert alert-info py-2 mb-3">
+    📊 Distance: <b id="distance">0</b> km |
+    ⏱ Duration: <b id="duration">0</b>
+  </div>
+
+  <div id="map" style="height:500px" class="border rounded"></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+/* =========================
+   GLOBAL STATE
+========================= */
+let historyPoints = [];
+let historyTimes = [];
+let polyline, startMarker, endMarker;
+let playbackMarker, playbackLine;
+let playIndex = 0;
+let playTimer = null;
+let speed = 300;
+
+/* =========================
+   MAP INIT (IP SAFE ✅)
+========================= */
+// 🔥 IMPORTANT: This is now FULLY IP-safe
+const API = "{{ url_for('traccar.api_traccar_route', device_id=device.id) }}";
+
+const map = L.map("map").setView([20.59, 78.96], 5);
+
+L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  attribution: "© OpenStreetMap contributors"
+}).addTo(map);
+
+/* =========================
+   ICON
+========================= */
+const carIcon = L.divIcon({
+  html: "🚗",
+  iconSize: [30, 30],
+  className: ""
+});
+
+/* =========================
+   HELPERS
+========================= */
+function toTraccarISO(local) {
+  return new Date(local).toISOString().replace(".000", "");
+}
+
+function haversine(a, b) {
+  const R = 6371;
+  const dLat = (b[0] - a[0]) * Math.PI / 180;
+  const dLng = (b[1] - a[1]) * Math.PI / 180;
+  const sa =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(a[0] * Math.PI / 180) *
+    Math.cos(b[0] * Math.PI / 180) *
+    Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(sa));
+}
+
+function formatDuration(ms) {
+  const s = Math.floor(ms / 1000);
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  return `${h}h ${m}m`;
+}
+
+/* =========================
+   LOAD HISTORY (IP SAFE FETCH ✅)
+========================= */
+loadBtn.onclick = async () => {
+  if (!fromInput.value || !toInput.value) {
+    alert("Select From & To time");
+    return;
+  }
+
+  const url = `${API}?from=${toTraccarISO(fromInput.value)}&to=${toTraccarISO(toInput.value)}`;
+
+  const res = await fetch(url, { credentials: "same-origin" });
+  const data = await res.json();
+
+  historyPoints = [];
+  historyTimes = [];
+  playIndex = 0;
+
+  for (const p of data) {
+    const lat = Number(p.latitude ?? p.lat);
+    const lng = Number(p.longitude ?? p.lon);
+    const t = p.deviceTime || p.fixTime;
+
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+    historyPoints.push([lat, lng]);
+    historyTimes.push(t ? new Date(t) : null);
+  }
+
+  if (historyPoints.length < 2) {
+    alert("No GPS data for this time range.");
+    return;
+  }
+
+  [polyline, startMarker, endMarker, playbackMarker, playbackLine]
+    .forEach(l => l && map.removeLayer(l));
+
+  polyline = L.polyline(historyPoints, { color: "blue", weight: 4 }).addTo(map);
+  startMarker = L.marker(historyPoints[0]).addTo(map).bindPopup("🟢 Start");
+  endMarker = L.marker(historyPoints.at(-1)).addTo(map).bindPopup("🔴 End");
+
+  map.fitBounds(polyline.getBounds(), { padding: [40,40] });
+
+  let dist = 0;
+  for (let i = 1; i < historyPoints.length; i++) {
+    dist += haversine(historyPoints[i-1], historyPoints[i]);
+  }
+
+  distance.innerText = dist.toFixed(2);
+
+  if (historyTimes[0] && historyTimes.at(-1)) {
+    duration.innerText = formatDuration(historyTimes.at(-1) - historyTimes[0]);
+  }
+
+  resetPlayback();
+};
+
+/* =========================
+   PLAYBACK (FIXED BUGS)
+========================= */
+speedSlider.oninput = e => {
+  speed = Number(e.target.value);
+
+  if (playTimer) {
+    pausePlayback();
+    startPlayback();
+  }
+};
+
+function startPlayback() {
+  if (!historyPoints.length || playTimer) return;
+
+  if (!playbackMarker) {
+    playbackMarker = L.marker(historyPoints[0], { icon: carIcon }).addTo(map);
+    playbackMarker.bindPopup("", { autoClose: true, closeOnClick: true });
+
+    playbackLine = L.polyline([], { color: "orange", weight: 3 }).addTo(map);
+  }
+
+  playTimer = setInterval(() => {
+    if (playIndex >= historyPoints.length) {
+      pausePlayback();
+      return;
+    }
+
+    const pt = historyPoints[playIndex];
+    const time = historyTimes[playIndex];
+
+    playbackMarker.setLatLng(pt);
+    playbackLine.addLatLng(pt);
+
+    if (time) {
+      playbackMarker.setPopupContent(`🕒 ${time.toLocaleString()}`);
+    }
+
+    map.panTo(pt, { animate: true });
+    playIndex++;
+  }, speed);
+}
+
+function pausePlayback() {
+  clearInterval(playTimer);
+  playTimer = null;
+}
+
+function resetPlayback() {
+  pausePlayback();
+  playIndex = 0;
+  playbackLine && playbackLine.setLatLngs([]);
+  playbackMarker && playbackMarker.setLatLng(historyPoints[0]);
+}
+
+/* =========================
+   BUTTONS
+========================= */
+playBtn.onclick = startPlayback;
+pauseBtn.onclick = pausePlayback;
+resetBtn.onclick = resetPlayback;
+</script>
+{% endblock %}

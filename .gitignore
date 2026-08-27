@@ -1,0 +1,17 @@
+*.zip
+*.tar.gz
+*.exe
+*.dll
+*.lib
+venv/
+Lib/
+libs/
+tcl/
+Doc/
+Scripts/
+include/
+__pycache__/
+*.pyc
+device_log.txt
+listener_log.txt
+instance/*.db

@@ -1,0 +1,398 @@
+{% extends "base.html" %}
+{% block title %}Fleet Command Center{% endblock %}
+{% block page_title %}Real-Time Fleet Command Center{% endblock %}
+
+{% block extra_head %}
+<!-- Leaflet & Plugins -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet.fullscreen@2.4.0/Control.FullScreen.css" />
+<style>
+  .command-map-container {
+    height: 600px;
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    position: relative;
+    border: 1px solid var(--border-subtle);
+  }
+  #commandMap {
+    height: 100%;
+    width: 100%;
+    background-color: #0f172a;
+  }
+  .vehicle-list-pane {
+    max-height: 600px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    padding-right: 4px;
+  }
+  .vehicle-item-card {
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    padding: 0.9rem 1rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+  .vehicle-item-card:hover, .vehicle-item-card.selected {
+    background-color: var(--bg-card-hover);
+    border-color: var(--color-primary);
+    transform: translateX(4px);
+  }
+  .vehicle-icon-bubble {
+    width: 40px;
+    height: 40px;
+    border-radius: var(--radius-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.25rem;
+    flex-shrink: 0;
+  }
+  .vehicle-icon-bubble.moving { background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3); }
+  .vehicle-icon-bubble.idle { background: rgba(245, 158, 11, 0.15); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.3); }
+  .vehicle-icon-bubble.stopped { background: rgba(100, 116, 139, 0.2); color: #94a3b8; border: 1px solid rgba(100, 116, 139, 0.3); }
+  .vehicle-icon-bubble.offline { background: rgba(244, 63, 94, 0.15); color: #f43f5e; border: 1px solid rgba(244, 63, 94, 0.3); }
+
+  .vehicle-marker-svg {
+    transition: transform 0.6s cubic-bezier(0.25, 1, 0.5, 1);
+    transform-origin: center center;
+    filter: drop-shadow(0 2px 5px rgba(0,0,0,0.5));
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Executive Telematics Metrics Row -->
+<div class="row g-3 mb-4">
+  <div class="col-6 col-lg-2">
+    <div class="kpi-widget" style="--kpi-accent: #3b82f6; --kpi-bg: rgba(59, 130, 246, 0.12);">
+      <div class="d-flex justify-content-between align-items-start mb-2">
+        <div class="kpi-label">Total Fleet</div>
+        <div class="kpi-icon-box"><i class="bi bi-truck"></i></div>
+      </div>
+      <div class="kpi-value mono-num" id="kpiTotal">{{ stats.total if stats else devices|length }}</div>
+      <div class="text-muted small mt-1">Managed units</div>
+    </div>
+  </div>
+
+  <div class="col-6 col-lg-2">
+    <div class="kpi-widget" style="--kpi-accent: #10b981; --kpi-bg: rgba(16, 185, 129, 0.12);">
+      <div class="d-flex justify-content-between align-items-start mb-2">
+        <div class="kpi-label">In Transit</div>
+        <div class="kpi-icon-box"><i class="bi bi-lightning-charge-fill"></i></div>
+      </div>
+      <div class="kpi-value text-success mono-num" id="kpiMoving">{{ stats.moving if stats else 0 }}</div>
+      <div class="text-success small mt-1"><span class="pulse-dot d-inline-block me-1"></span> Live moving</div>
+    </div>
+  </div>
+
+  <div class="col-6 col-lg-2">
+    <div class="kpi-widget" style="--kpi-accent: #f59e0b; --kpi-bg: rgba(245, 158, 11, 0.12);">
+      <div class="d-flex justify-content-between align-items-start mb-2">
+        <div class="kpi-label">Engine Idling</div>
+        <div class="kpi-icon-box"><i class="bi bi-clock-history"></i></div>
+      </div>
+      <div class="kpi-value text-warning mono-num" id="kpiIdle">{{ stats.idle if stats else 0 }}</div>
+      <div class="text-warning small mt-1">Ignition ON</div>
+    </div>
+  </div>
+
+  <div class="col-6 col-lg-2">
+    <div class="kpi-widget" style="--kpi-accent: #94a3b8; --kpi-bg: rgba(148, 163, 184, 0.12);">
+      <div class="d-flex justify-content-between align-items-start mb-2">
+        <div class="kpi-label">Parked / Off</div>
+        <div class="kpi-icon-box"><i class="bi bi-pause-circle-fill"></i></div>
+      </div>
+      <div class="kpi-value text-secondary mono-num" id="kpiStopped">{{ stats.stopped if stats else 0 }}</div>
+      <div class="text-muted small mt-1">Ignition OFF</div>
+    </div>
+  </div>
+
+  <div class="col-6 col-lg-2">
+    <div class="kpi-widget" style="--kpi-accent: #f43f5e; --kpi-bg: rgba(244, 63, 94, 0.12);">
+      <div class="d-flex justify-content-between align-items-start mb-2">
+        <div class="kpi-label">Offline Units</div>
+        <div class="kpi-icon-box"><i class="bi bi-wifi-off"></i></div>
+      </div>
+      <div class="kpi-value text-danger mono-num" id="kpiOffline">{{ stats.offline if stats else devices|length }}</div>
+      <div class="text-danger small mt-1">&gt; 5m no signal</div>
+    </div>
+  </div>
+
+  <div class="col-6 col-lg-2">
+    <div class="kpi-widget" style="--kpi-accent: #8b5cf6; --kpi-bg: rgba(139, 92, 246, 0.12);">
+      <div class="d-flex justify-content-between align-items-start mb-2">
+        <div class="kpi-label">Active Alerts</div>
+        <div class="kpi-icon-box"><i class="bi bi-shield-exclamation"></i></div>
+      </div>
+      <div class="kpi-value text-purple mono-num" id="kpiAlerts">{{ active_alerts_count|default(0) }}</div>
+      <div class="text-muted small mt-1">Requires review</div>
+    </div>
+  </div>
+</div>
+
+<!-- Command Center Split Interface -->
+<div class="row g-3">
+  <!-- Left Side: Searchable Fleet Asset Pane -->
+  <div class="col-12 col-xl-4">
+    <div class="fleet-card p-3 h-100 d-flex flex-column">
+      <!-- Search & Filters -->
+      <div class="mb-3">
+        <div class="input-group mb-2">
+          <span class="input-group-text bg-surface border-subtle text-muted"><i class="bi bi-search"></i></span>
+          <input type="text" id="vehicleSearchInput" class="form-control" placeholder="Search by name, plate, IMEI...">
+        </div>
+        <div class="d-flex gap-1 overflow-x-auto pb-1" id="statusFilterGroup">
+          <button class="btn btn-sm btn-fleet-secondary active py-1 px-2 small filter-btn" data-filter="all">All</button>
+          <button class="btn btn-sm btn-fleet-secondary py-1 px-2 small text-success filter-btn" data-filter="moving">Moving</button>
+          <button class="btn btn-sm btn-fleet-secondary py-1 px-2 small text-warning filter-btn" data-filter="idle">Idle</button>
+          <button class="btn btn-sm btn-fleet-secondary py-1 px-2 small text-danger filter-btn" data-filter="offline">Offline</button>
+        </div>
+      </div>
+
+      <!-- Vehicle List Items -->
+      <div class="vehicle-list-pane flex-grow-1" id="vehicleListContainer">
+        {% for d in devices %}
+        <div class="vehicle-item-card" id="card-{{ d.id }}"
+             data-id="{{ d.id }}"
+             data-lat="{{ d.last_latitude if d.last_latitude is not none else d.last_lat|default('') }}"
+             data-lng="{{ d.last_longitude if d.last_longitude is not none else d.last_lng|default('') }}"
+             data-name="{{ d.name|lower }}"
+             data-plate="{{ (d.plate_number or '')|lower }}"
+             data-imei="{{ (d.imei or '')|lower }}"
+             data-status="{{ d.status }}">
+          <div class="d-flex align-items-center gap-3">
+            <div class="vehicle-icon-bubble {{ d.status }}">
+              {% if d.device_type == 'truck' or d.type == 'truck' %}🚛
+              {% elif d.device_type == 'trailer' or d.type == 'trailer' %}🚚
+              {% elif d.device_type == 'reefer' or d.type == 'reefer' %}❄️
+              {% elif d.device_type == 'tempo' or d.type == 'tempo' %}🚐
+              {% elif d.device_type == 'van' or d.type == 'van' %}📦
+              {% elif d.device_type == 'bike' or d.type == 'bike' %}🏍️
+              {% else %}🚗{% endif %}
+            </div>
+            <div class="flex-grow-1 min-w-0">
+              <div class="d-flex justify-content-between align-items-center mb-1">
+                <div class="fw-bold text-white text-truncate">{{ d.name }}</div>
+                <span class="status-pill {{ d.status }}">{{ d.status }}</span>
+              </div>
+              <div class="d-flex align-items-center gap-2 text-muted small">
+                <span class="mono-num"><i class="bi bi-card-text me-1"></i>{{ d.imei or 'N/A' }}</span>
+                <span>•</span>
+                <span class="mono-num text-info fw-semibold">{{ d.speed|default(0)|round(1) }} km/h</span>
+              </div>
+              <div class="d-flex justify-content-between align-items-center mt-2 pt-2 border-top border-subtle text-muted" style="font-size: 0.75rem;">
+                <div><i class="bi bi-clock me-1"></i>{{ d.lastUpdate|default(d.last_update|default('Live')) }}</div>
+                <div><i class="bi bi-battery-half me-1"></i>{{ d.battery|default(98)|round(0) }}%</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        {% else %}
+        <div class="text-center py-5 text-muted">
+          <i class="bi bi-truck fs-1 d-block mb-2"></i>
+          <p>No vehicles connected yet.</p>
+          <button class="btn btn-sm btn-fleet-primary" data-bs-toggle="modal" data-bs-target="#quickAddDeviceModal">Add Your First Tracker</button>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Right Side: Interactive Real-Time Map -->
+  <div class="col-12 col-xl-8">
+    <div class="fleet-card p-3">
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <div class="d-flex align-items-center gap-2">
+          <h6 class="fw-bold text-white mb-0"><i class="bi bi-geo-alt-fill text-primary me-1"></i> Live Spatial Dispatch</h6>
+          <span class="badge bg-surface-elevated text-muted small mono-num">{{ devices|length }} Trackers</span>
+        </div>
+        <div class="d-flex gap-2">
+          <button class="btn btn-sm btn-fleet-secondary py-1" onclick="fitAllVehicles()" title="Fit all vehicles in view">
+            <i class="bi bi-arrows-fullscreen"></i> Fit All
+          </button>
+          <button class="btn btn-sm btn-fleet-secondary py-1" id="tileLayerToggle" title="Switch Satellite / Dark mode">
+            <i class="bi bi-layers"></i> Layer
+          </button>
+        </div>
+      </div>
+
+      <div class="command-map-container">
+        <div id="commandMap"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Embedded JSON Data Script -->
+<script id="devicesJsonData" type="application/json">
+{{ devices_json|tojson|safe if devices_json else '[]' }}
+</script>
+{% endblock %}
+
+{% block extra_scripts %}
+<!-- Leaflet & Rotated Marker Plugin -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.fullscreen@2.4.0/Control.FullScreen.js"></script>
+
+<script>
+  const devicesDataEl = document.getElementById('devicesJsonData');
+  let rawDevices = devicesDataEl ? JSON.parse(devicesDataEl.textContent || '[]') : [];
+  let map, markers = {}, vehicleMarkersGroup = L.featureGroup();
+  let isSatellite = false;
+  let streetLayer, satelliteLayer;
+
+  function initMap() {
+    map = L.map('commandMap', {
+      fullscreenControl: true,
+      zoomControl: true
+    }).setView([20.5937, 78.9629], 5);
+
+    streetLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+      attribution: '&copy; CartoDB &copy; OpenStreetMap',
+      maxZoom: 19
+    }).addTo(map);
+
+    satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+      attribution: '&copy; Esri &mdash; Source: Esri, Maxar, Earthstar Geographics'
+    });
+
+    renderVehicleMarkers(rawDevices);
+    fitAllVehicles();
+
+    document.querySelectorAll('.vehicle-item-card').forEach(card => {
+      card.addEventListener('click', function() {
+        const id = parseInt(this.dataset.id);
+        const lat = parseFloat(this.dataset.lat);
+        const lng = parseFloat(this.dataset.lng);
+        focusVehicle(id, isNaN(lat) ? null : lat, isNaN(lng) ? null : lng);
+      });
+    });
+  }
+
+  function createVehicleIcon(device) {
+    const isMoving = device.status === 'moving';
+    const color = isMoving ? '#10b981' : (device.status === 'idle' ? '#f59e0b' : (device.status === 'offline' ? '#f43f5e' : '#94a3b8'));
+    const heading = device.heading || 0;
+
+    const svgIcon = `
+      <div style="transform: rotate(${heading}deg); width: 44px; height: 44px;" class="vehicle-marker-svg position-relative">
+        <svg viewBox="0 0 100 100" width="44" height="44">
+          <circle cx="50" cy="50" r="45" fill="#0f172a" stroke="${color}" stroke-width="6" opacity="0.95"/>
+          <polygon points="50,12 65,42 50,34 35,42" fill="${color}" />
+          <circle cx="50" cy="60" r="14" fill="#ffffff" />
+        </svg>
+      </div>
+    `;
+
+    return L.divIcon({
+      html: svgIcon,
+      className: 'custom-vehicle-marker-wrapper',
+      iconSize: [44, 44],
+      iconAnchor: [22, 22],
+      popupAnchor: [0, -22]
+    });
+  }
+
+  function renderVehicleMarkers(devicesList) {
+    vehicleMarkersGroup.clearLayers();
+    markers = {};
+
+    devicesList.forEach(device => {
+      if (device.latitude && device.longitude) {
+        const latlng = [device.latitude, device.longitude];
+        const icon = createVehicleIcon(device);
+        const marker = L.marker(latlng, { icon: icon });
+
+        const popupContent = `
+          <div class="p-3" style="min-width: 240px;">
+            <div class="d-flex justify-content-between align-items-center mb-2 pb-2 border-bottom border-subtle">
+              <strong class="text-white fs-6">${device.name}</strong>
+              <span class="status-pill ${device.status}">${device.status}</span>
+            </div>
+            <div class="row g-2 mb-3 small">
+              <div class="col-6">
+                <div class="text-muted">Speed</div>
+                <div class="text-white fw-bold mono-num fs-6">${device.speed} km/h</div>
+              </div>
+              <div class="col-6">
+                <div class="text-muted">Heading</div>
+                <div class="text-white fw-bold mono-num">${device.heading}°</div>
+              </div>
+              <div class="col-12">
+                <div class="text-muted">Last Update</div>
+                <div class="text-white mono-num" style="font-size: 0.72rem;">${device.last_update}</div>
+              </div>
+            </div>
+            <a href="/map/history/${device.id}" class="btn btn-sm btn-fleet-primary w-100 text-center py-1">
+              <i class="bi bi-clock-history me-1"></i> Trip History
+            </a>
+          </div>
+        `;
+
+        marker.bindPopup(popupContent);
+        marker.addTo(vehicleMarkersGroup);
+        markers[device.id] = marker;
+      }
+    });
+
+    vehicleMarkersGroup.addTo(map);
+  }
+
+  function focusVehicle(id, lat, lng) {
+    document.querySelectorAll('.vehicle-item-card').forEach(c => c.classList.remove('selected'));
+    const card = document.getElementById('card-' + id);
+    if (card) card.classList.add('selected');
+
+    if (lat && lng && map) {
+      map.setView([lat, lng], 15, { animate: true, duration: 1 });
+      if (markers[id]) markers[id].openPopup();
+    }
+  }
+
+  function fitAllVehicles() {
+    if (vehicleMarkersGroup.getLayers().length > 0) {
+      map.fitBounds(vehicleMarkersGroup.getBounds(), { padding: [50, 50], maxZoom: 16 });
+    }
+  }
+
+  document.getElementById('vehicleSearchInput').addEventListener('input', function() {
+    const q = this.value.toLowerCase().trim();
+    document.querySelectorAll('.vehicle-item-card').forEach(card => {
+      const match = card.dataset.name.includes(q) || card.dataset.imei.includes(q);
+      card.style.display = match ? 'block' : 'none';
+    });
+  });
+
+  document.querySelectorAll('.filter-btn').forEach(btn => {
+    btn.addEventListener('click', function() {
+      document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+      this.classList.add('active');
+      const filter = this.dataset.filter;
+      document.querySelectorAll('.vehicle-item-card').forEach(card => {
+        if (filter === 'all' || card.dataset.status === filter) {
+          card.style.display = 'block';
+        } else {
+          card.style.display = 'none';
+        }
+      });
+    });
+  });
+
+  document.getElementById('tileLayerToggle').addEventListener('click', function() {
+    if (isSatellite) {
+      map.removeLayer(satelliteLayer);
+      map.addLayer(streetLayer);
+      isSatellite = false;
+    } else {
+      map.removeLayer(streetLayer);
+      map.addLayer(satelliteLayer);
+      isSatellite = true;
+    }
+  });
+
+  document.addEventListener("DOMContentLoaded", initMap);
+</script>
+{% endblock %}

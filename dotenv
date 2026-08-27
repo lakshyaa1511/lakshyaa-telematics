@@ -1,0 +1,14 @@
+# .env file
+
+# The SECRET_KEY MUST be a long, random string. Generate this ONCE.
+SECRET_KEY="b'afb35c7dc9a9c21ce0ed6d95957eeeb8dc4c996afe5870f0318cdf777314805a'"
+
+# Your Traccar Credentials
+TRACCAR_URL="http://3.109.158.100:8082"
+TRACCAR_USER="lakshyaa.otp@gmail.com"
+TRACCAR_PASS="Lakshyaa@Dhyey0911"
+
+# Optional: SMTP details
+# SMTP_HOST="smtp.gmail.com"
+# SMTP_USER="your_email@gmail.com"
+# SMTP_PASS="your_app_password"

@@ -1,0 +1,112 @@
+#!/usr/bin/env python3
+import socket
+import struct
+import datetime
+import requests
+
+# ========= CONFIG =========
+HOST = "0.0.0.0"
+PORT = 5001
+API_URL = "http://127.0.0.1:5000/api/location"   # Flask API endpoint (change to your server if needed)
+LOGFILE = "listener_log.txt"
+# ==========================
+
+
+def log(msg: str):
+    ts = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    line = f"[{ts}] {msg}"
+    print(line)
+    with open(LOGFILE, "a") as f:
+        f.write(line + "\n")
+
+
+def send_ack(conn, protocol: int, serial: bytes):
+    """Send GT06 ACK to device."""
+    try:
+        # format: 78 78 05 01 (serial 2 bytes) (CRC 2 bytes) 0D 0A
+        body = b"\x78\x78\x05" + bytes([protocol]) + serial
+        crc = sum(body) & 0xFFFF
+        crc_bytes = struct.pack(">H", crc)
+        packet = body + crc_bytes + b"\x0D\x0A"
+        conn.sendall(packet)
+        log(f"✅ Sent ACK (proto={protocol})")
+    except Exception as e:
+        log(f"ACK send failed: {e}")
+
+
+def parse_login(data):
+    """Parse login packet (proto=0x01)"""
+    imei_bcd = data[4:12]
+    imei = "".join(f"{(b >> 4) & 0x0F}{b & 0x0F}" for b in imei_bcd).lstrip("0")
+    serial = data[-4:-2]
+    return imei, serial
+
+
+
+
+def handle_client(conn, addr):
+    log(f"Device connected from {addr}")
+    with conn:
+        try:
+            while True:
+                data = conn.recv(1024)
+                if not data:
+                    break
+
+                # Frame check
+                if len(data) < 5 or not data.startswith(b"\x78\x78"):
+                    continue
+
+                protocol = data[3]
+                if protocol == 0x01:  # LOGIN
+                    imei, serial = parse_login(data)
+                    log(f"📡 Login from IMEI={imei}")
+                    send_ack(conn, protocol, serial)
+
+                elif protocol == 0x12:  # GPS DATA
+                    gps = parse_gps(data)
+                    if gps:
+                        log(f"📍 GPS: {gps['lat']:.6f}, {gps['lon']:.6f} | Speed={gps['speed']} km/h")
+
+                        # Send ACK
+                        send_ack(conn, protocol, gps["serial"])
+
+                        # Forward to Flask API
+                        try:
+                            requests.post(API_URL, json={
+                                "device_id": 1,   # TODO: replace with real mapping if you have device table
+                                "latitude": gps["lat"],
+                                "longitude": gps["lon"]
+                            }, timeout=3)
+                            log("✅ Location forwarded to Flask API.")
+                        except Exception as e:
+                            log(f"❌ Failed to send to API: {e}")
+
+                elif protocol == 0x13:  # Heartbeat
+                    serial = data[-4:-2]
+                    log("💓 Heartbeat received.")
+                    send_ack(conn, protocol, serial)
+
+                else:
+                    log(f"⚙️ Unknown protocol: {protocol}")
+
+        except Exception as e:
+            log(f"Connection error with {addr}: {e}")
+
+    log(f"Device {addr} disconnected.")
+
+
+def start_server():
+    log(f"Listening for GPS devices on {HOST}:{PORT} ...")
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        s.bind((HOST, PORT))
+        s.listen(5)
+        while True:
+            conn, addr = s.accept()
+            handle_client(conn, addr)
+
+
+if __name__ == "__main__":
+    start_server()
+

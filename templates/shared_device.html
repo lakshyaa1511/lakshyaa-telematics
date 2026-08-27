@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Live Location - {{ device.name }}{% endblock %}
+{% block content %}
+<div class="container mt-4">
+  <h2 class="fw-bold">📍 {{ device.name }} — Live Location</h2>
+  <p class="text-muted">This is a shared live view. Updates every 10 seconds.</p>
+  <div id="map" style="height:500px; border-radius:10px;"></div>
+</div>
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script>
+const map = L.map('map').setView([20.5937, 78.9629], 5);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+
+let marker = null;
+
+async function fetchLocation() {
+  const res = await fetch('/api/shared_location/{{ device.id }}');
+  const data = await res.json();
+  if (!data.latitude || !data.longitude) return;
+  const latlng = [data.latitude, data.longitude];
+  if (!marker) {
+    marker = L.marker(latlng).addTo(map);
+    map.setView(latlng, 14);
+  } else {
+    marker.setLatLng(latlng);
+  }
+  marker.bindPopup(`<b>{{ device.name }}</b><br>Speed: ${data.speed || 0} km/h`).openPopup();
+}
+
+fetchLocation();
+setInterval(fetchLocation, 10000);
+</script>
+{% endblock %}

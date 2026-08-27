@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Traccar Embedded View</title>
+    <!-- Load Bootstrap 5.3 CSS for styling the button -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" xintegrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    
+    <!-- CRUCIAL STYLES FOR FULL-SCREEN EMBEDDING -->
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            width: 100%;
+            overflow: hidden; /* Hides scrollbars */
+            font-family: sans-serif;
+        }
+        #traccar-iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+            display: block;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1; 
+        }
+        #back-button-container {
+            position: fixed;
+            top: 15px;
+            left: 15px;
+            z-index: 10; 
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            border-radius: .375rem;
+        }
+    </style>
+</head>
+<body>
+    
+    <!-- 1. The floating button to return to your Flask dashboard (Custom UI Control) -->
+    <div id="back-button-container">
+        <a href="{{ url_for('dashboard') }}" class="btn btn-primary btn-lg">
+            <i class="bi bi-arrow-left-circle"></i> Back to Dashboard
+        </a>
+    </div>
+
+    <!-- 
+        *** FIX: Moved script block here so the function is defined before the iframe calls it. *** -->
+    <script>
+        function handleIframeLoad(iframe) {
+            // This waits a moment for the Traccar application to fully initialize inside the iframe
+            // and then attempts to send a command to hide its sidebar.
+            setTimeout(() => {
+                if (iframe.contentWindow) {
+                    // This message tells Traccar to use its internal functions to toggle the sidebar.
+                    // This is a known, but unofficial, workaround for some versions of Traccar.
+                    const message = {
+                        method: 'toggle-devices',
+                        value: false 
+                    };
+                    
+                    // We use '*' as the target origin to ensure the message gets sent, 
+                    // regardless of domain/port differences.
+                    iframe.contentWindow.postMessage(message, '*');
+                }
+            }, 3000); // Wait 3 seconds for Traccar to load completely
+        }
+    </script>
+    
+    <!-- 2. The iframe. -->
+    <iframe id="traccar-iframe" src="{{ iframe_src }}" allowfullscreen onload="handleIframeLoad(this)"></iframe>
+
+</body>
+</html>

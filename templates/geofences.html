@@ -1,0 +1,217 @@
+{% extends "base.html" %}
+{% block title %}Geofences{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+  <h2 class="fw-bold text-primary">Geofencing</h2>
+  <p class="text-muted">
+    Click on the map to place a circular geofence OR draw a custom polygon using the drawing tool.
+  </p>
+
+  <div class="row mb-3 align-items-center g-3">
+    <div class="col-md-3">
+      <input id="fenceName" class="form-control" placeholder="Geofence name (e.g. Home)">
+    </div>
+    <div class="col-md-3">
+      <select id="deviceSelect" class="form-select">
+        <option value="">All Devices</option>
+        {% for d in devices %}
+          <option value="{{ d.id }}">{{ d.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-3">
+      <input id="radiusSlider" type="range" min="50" max="2000" step="50" value="200" class="form-range">
+      <small>Radius: <b id="radiusLabel">200</b> meters (for circle)</small>
+    </div>
+    <div class="col-md-3">
+      <button id="saveBtn" class="btn btn-success w-100">Save Geofence</button>
+    </div>
+  </div>
+  <div id="map" style="height:500px" class="border rounded"></div>
+
+  <hr>
+
+  <h4>Your Geofences</h4>
+
+  <div class="row mt-3">
+    {% for g in geofences %}
+      <div class="col-md-4 mb-3">
+        <div class="card shadow-sm">
+          <div class="card-body d-flex justify-content-between align-items-center">
+            <div>
+              <b>{{ g.name }}</b><br>
+              <small class="text-muted">
+                {% if g.radius_meters %}
+                  📍 Circle — {{ g.radius_meters }}m radius
+                {% else %}
+                  🔷 Polygon
+                {% endif %}
+                <br>
+                {% if g.device_id %}
+                  🎯 {{ devices|selectattr('id', 'eq', g.device_id)|map(attribute='name')|first|default('Unknown device') }}
+                {% else %}
+                  📡 All devices
+                {% endif %}
+              </small>
+            </div>
+            <button class="btn btn-sm btn-danger delete-btn" data-id="{{ g.id }}">Delete</button>
+          </div>
+        </div>
+      </div>
+    {% else %}
+      <p class="text-muted">No geofences yet.</p>
+    {% endfor %}
+  </div>
+</div>
+
+{% endblock %}
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css"/>
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
+
+{% block scripts %}
+<script>
+const map = L.map("map").setView([20.59, 78.96], 5);
+
+L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(map);
+
+// ======= CIRCLE MODE =======
+let circle = null;
+let selectedLat = null;
+let selectedLng = null;
+
+// Click to place / move circle
+map.on("click", function(e) {
+  selectedLat = e.latlng.lat;
+  selectedLng = e.latlng.lng;
+
+  if (circle) map.removeLayer(circle);
+
+  const radius = document.getElementById("radiusSlider").value;
+
+  circle = L.circle([selectedLat, selectedLng], {
+    radius: radius,
+    color: "blue",
+    fillOpacity: 0.2
+  }).addTo(map);
+});
+
+// Live update radius
+document.getElementById("radiusSlider").oninput = function() {
+  document.getElementById("radiusLabel").innerText = this.value;
+  if (circle) {
+    circle.setRadius(this.value);
+  }
+};
+
+// ======= POLYGON MODE (Leaflet Draw) =======
+let drawnItems = new L.FeatureGroup();
+map.addLayer(drawnItems);
+
+let drawControl = new L.Control.Draw({
+  edit: {
+    featureGroup: drawnItems
+  },
+  draw: {
+    polygon: true,
+    polyline: false,
+    rectangle: false,
+    circle: false,
+    marker: false,
+    circlemarker: false
+  }
+});
+map.addControl(drawControl);
+
+// When polygon is drawn
+map.on(L.Draw.Event.CREATED, function (e) {
+  drawnItems.clearLayers(); // allow only one polygon at a time
+  drawnItems.addLayer(e.layer);
+});
+
+// ======= SAVE BUTTON =======
+document.getElementById("saveBtn").onclick = async function() {
+  const name = document.getElementById("fenceName").value;
+
+  if (!name) {
+    alert("Please enter a geofence name");
+    return;
+  }
+
+  // CASE 1 — Save Circle
+  if (circle && !drawnItems.getLayers().length) {
+    const radius = document.getElementById("radiusSlider").value;
+
+    const res = await fetch("/api/geofence/create", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({
+        name: name,
+        type: "circle",
+        lat: selectedLat,
+        lng: selectedLng,
+        radius: radius,
+        device_id: document.getElementById('deviceSelect').value || null
+      })
+    });
+
+    const data = await res.json();
+    if (data.status === "ok") {
+      alert("Circular geofence saved!");
+      window.location.reload();
+    } else {
+      alert("Failed to save geofence");
+    }
+    return;
+  }
+
+  // CASE 2 — Save Polygon
+  if (drawnItems.getLayers().length) {
+    const layer = drawnItems.getLayers()[0];
+    const latlngs = layer.getLatLngs()[0]; // outer ring
+
+    const points = latlngs.map(p => ({
+      lat: p.lat,
+      lng: p.lng
+    }));
+
+    const res = await fetch("/api/geofence/create", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({
+        name: name,
+        type: "polygon",
+        points: points,
+        device_id: document.getElementById('deviceSelect').value || null
+      })
+    });
+
+    const data = await res.json();
+    if (data.status === "ok") {
+      alert("Polygon geofence saved!");
+      window.location.reload();
+    } else {
+      alert("Failed to save geofence");
+    }
+    return;
+  }
+
+  alert("Please click on the map (circle) or draw a polygon before saving.");
+};
+
+//=========Delete Button========
+// Delete geofence
+document.addEventListener('click', async function(e) {
+  if (!e.target.classList.contains('delete-btn')) return;
+  if (!confirm('Delete this geofence?')) return;
+  const id = e.target.dataset.id;
+  const res = await fetch(`/api/geofence/delete/${id}`, { method: 'DELETE' });
+  const data = await res.json();
+  if (data.status === 'ok') window.location.reload();
+  else alert('Failed to delete geofence');
+});
+
+</script>
+{% endblock %}

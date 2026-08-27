@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block title %}Trips{% endblock %}
+{% block content %}
+<div class="container mt-4">
+  <h2 class="fw-bold text-primary">🚗 Trip Log</h2>
+  <p class="text-muted">Automatically detected trips across all your devices.</p>
+
+  {% if trips %}
+  <div class="table-responsive">
+    <table class="table table-hover shadow-sm">
+      <thead class="table-dark">
+        <tr>
+          <th>Device</th>
+          <th>Start Time</th>
+          <th>End Time</th>
+          <th>Duration</th>
+	  <th>Distance</th>
+          <th>Start Location</th>
+          <th>End Location</th>
+          <th>Max Speed</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for trip in trips %}
+        <tr>
+          <td>{{ trip.device.name }}</td>
+          <td>{{ trip.start_time.strftime('%Y-%m-%d %H:%M') if trip.start_time else '—' }}</td>
+          <td>{{ trip.end_time.strftime('%Y-%m-%d %H:%M') if trip.end_time else '—' }}</td>
+          <td>
+            {% if trip.start_time and trip.end_time %}
+              {% set duration = (trip.end_time - trip.start_time).seconds %}
+              {{ '%02d:%02d' % (duration // 3600, (duration % 3600) // 60) }}
+            {% else %}
+              —
+            {% endif %}
+          </td>
+	  <td>{{ '%.2f km' % trip.distance_km if trip.distance_km else '0 km' }}</td>
+          <td class="geocode-cell" data-lat="{{ trip.start_lat }}" data-lng="{{ trip.start_lng }}">
+            <span class="text-muted small">Loading...</span>
+          </td>
+          <td class="geocode-cell" data-lat="{{ trip.end_lat }}" data-lng="{{ trip.end_lng }}">
+            <span class="text-muted small">{{ 'In progress' if trip.status == 'active' else 'Loading...' }}</span>
+          </td>
+          <td>{{ '%.1f km/h' % trip.max_speed if trip.max_speed else '0 km/h' }}</td>
+
+          <td>
+            {% if trip.status == 'active' %}
+              <span class="badge bg-success">🟢 Active</span>
+            {% else %}
+              <span class="badge bg-secondary">Completed</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+    <p class="text-muted">No trips detected yet. Trips are automatically logged when your device moves.</p>
+  {% endif %}
+</div>
+<script>
+document.querySelectorAll('.geocode-cell').forEach(async cell => {
+  const lat = cell.dataset.lat;
+  const lng = cell.dataset.lng;
+  if (!lat || !lng || lat === 'None') {
+    cell.innerHTML = '<span class="text-muted small">—</span>';
+    return;
+  }
+  if (cell.querySelector('span').textContent === 'In progress') return;
+  try {
+    const res = await fetch(`/api/geocode?lat=${lat}&lng=${lng}`);
+    const data = await res.json();
+    cell.innerHTML = `<span class="small">${data.address}</span>`;
+  } catch {
+    cell.innerHTML = '<span class="text-muted small">—</span>';
+  }
+});
+</script>
+{% endblock %}

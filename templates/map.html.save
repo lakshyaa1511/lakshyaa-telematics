@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+{% block title %}Devices Map{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h2 class="mb-0">📍 All Devices</h2>
+
+    <!-- Device Selector -->
+    <div class="d-flex gap-2">
+      <input type="text" id="searchBox" class="form-control" placeholder="🔎 Search device..." style="width: 200px;">
+      <select id="deviceSelector" class="form-select" style="width: 200px;">
+        <option value="">-- Select Device --</option>
+        {% for d in devices %}
+        <option value="{{ d.id }}">{{ d.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+  </div>
+
+  <div id="map" style="height: 600px; border-radius: 10px;"></div>
+</div>
+
+<!-- Leaflet CSS & JS - FIX: MUST be loaded here BEFORE the script tag uses L.map() -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+<!-- Leaflet Plugins -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet.fullscreen/Control.FullScreen.css" />
+<script src="https://unpkg.com/leaflet.fullscreen/Control.FullScreen.js"></script>
+
+<script>
+  const LIVE_URL = "{{ url_for('traccar.api_traccar_live_positions') }}";
+  // --- Initialization ---
+  const map = L.map('map').setView([0, 0], 2); 
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '© OpenStreetMap contributors'
+  }).addTo(map);
+
+  L.control.fullscreen({
+    position: 'topleft',
+    title: 'Full Screen',
+    titleCancel: 'Exit Full Screen'
+  }).addTo(map);
+
+  // Dictionary to store markers, keyed by device ID
+  const markers = {};
+  // Device list for name lookup
+  const devices = [{% for d in devices %}{ id: {{ d.id }}, name: '{{ d.name }}'}{% if not loop.last %},{% endif %}{% endfor %}];
+  
+  function getDeviceName(id) {
+    const device = devices.find(d => d.id === id);
+    return device ? device.name : `Device ${id}`;
+  }
+  
+  // --- Data Fetching and Marker Update ---
+  async function fetchData() {
+    try {
+      // Fetch data from the new Flask API endpoint
+      const response = await fetch(ces/live');
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      // FIX: Data is now a clean JSON array of positions
+      const data = await response.json(); 
+      
+      let bounds = L.latLngBounds([]);
+
+      data.forEach(p => {
+        // Use deviceId from the position object (p.deviceId)
+        const id = p.deviceId; 
+        const { latitude, longitude, speed } = p;
+        const name = getDeviceName(id);
+
+        if (!latitude || !longitude) return;
+
+        // If marker doesn’t exist, create it
+        if (!markers[id]) {
+          const icon = L.icon({
+            iconUrl: '/static/icons/car.png', 
+            iconSize: [40, 40]
+          });
+
+          const marker = L.marker([latitude, longitude], { icon }).addTo(map);
+          marker.bindPopup(`<b>${name}</b><br>Speed: ${speed ? speed.toFixed(1) : 0} km/h`); 
+          markers[id] = marker;
+        } else {
+          // smoothly move existing marker to new position
+          const marker = markers[id];
+          const start = marker.getLatLng();
+          const end = L.latLng(latitude, longitude);
+
+          const steps = 20;
+          let i = 0;
+          const interval = setInterval(() => {
+            if (i >= steps) {
+              clearInterval(interval);
+              marker.setLatLng(end);
+              marker.getPopup().setContent(`<b>${name}</b><br>Speed: ${speed ? speed.toFixed(1) : 0} km/h`);
+              return;
+            }
+            const lat = start.lat + (end.lat - start.lat) * (i / steps);
+            const lng = start.lng + (end.lng - start.lng) * (i / steps);
+            marker.setLatLng([lat, lng]);
+            i++;
+          }, 50); 
+        }
+        
+        bounds.extend([latitude, longitude]);
+      });
+      
+      if (Object.keys(markers).length > 0 && map.getBounds().isValid() === false) {
+          map.fitBounds(bounds, { padding: [50, 50] });
+      }
+
+    } catch (error) {
+      console.error('Error fetching live data:', error);
+    }
+  }
+
+  // Initial fetch and set interval for live updates
+  fetchData();
+  setInterval(fetchData, 5000); 
+
+  // --- UI/Selector Logic ---
+
+  // Search Box Logic
+  document.getElementById('searchBox').onkeyup = (e) => {
+    const searchTerm = e.target.value.toLowerCase();
+    const selector = document.getElementById('deviceSelector');
+    
+    for (let i = 0; i < selector.options.length; i++) {
+        const option = selector.options[i];
+        if (option.value === "") continue;
+
+        if (option.text.toLowerCase().includes(searchTerm)) {
+            option.style.display = '';
+        } else {
+            option.style.display = 'none';
+        }
+    }
+  };
+
+  // Device Selector Logic
+  document.getElementById('deviceSelector').onchange = (e) => {
+    const selectedId = e.target.value;
+    if (selectedId && markers[selectedId]) {
+      const marker = markers[selectedId];
+      map.setView(marker.getLatLng(), 15);
+      marker.openPopup();
+    }
+  };
+</script>
+{% endblock %}

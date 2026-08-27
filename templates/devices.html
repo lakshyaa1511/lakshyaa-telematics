@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+{% block title %}Devices{% endblock %}
+{% block content %}
+<div class="container mt-4">
+  <!-- Header with Search -->
+  <div class="d-flex justify-content-between align-items-center mb-4">
+   <p class="text-muted small">Manage and monitor all your connected vehicles</p>
+    <div class="d-flex">
+      <input id="searchBar" type="text" class="form-control me-2 shadow-sm" placeholder="🔍 Search devices...">
+      <!-- ✅ Corrected button spelling and modal trigger -->
+      <button class="btn btn-success rounded-3 animate__animated animate__fadeInRight"
+              data-bs-toggle="modal" data-bs-target="#addDeviceModal">
+        <i class="bi bi-plus-circle"></i> Add Device
+      </button>
+    </div>
+  </div>
+
+  {% if devices %}
+    <div class="table-responsive animate__animated animate__fadeInUp">
+      <table class="table table-hover shadow-sm rounded-3 overflow-hidden align-middle" id="devicesTable">
+        <thead class="table-dark">
+          <tr>
+            <th scope="col">Name</th>
+            <th scope="col">Device ID</th>
+            <th scope="col">Status</th>
+            <th scope="col" class="text-center">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for device in devices %}
+          <tr class="animate__animated animate__fadeInUp" data-name="{{ device.name|lower }}">
+            <td class="fw-bold text-dark">{{ device.name }}</td>
+            <td class="text-muted">{{ device.id }}</td>
+            <td>
+            <span class="badge {% if device.status == 'moving' %}bg-success{% elif device.status == 'idle' %}bg-warning{% else %}bg-secondary{% endif %}">
+                {{ device.status | capitalize }}
+            </span>
+            </td>
+	    
+	    <td class="text-center">
+	      {% if device.linked %}
+	        <a href="{{ url_for('traccar.map_single', traccar_id=device.traccar_device_id) }}"
+	           class="btn btn-sm btn-premium"><i class= "bi bi-map"></i>Map</a>
+
+	        <a href="{{ url_for('traccar.history', traccar_id=device.traccar_device_id) }}"
+	           class="btn btn-sm btn-outline-premium"><i class="bi bi-clock-history"></i>History</a>
+	      {% else %}
+	        <span class="badge bg-secondary">Not linked</span>
+	      {% endif %}
+
+	      <button class="btn btn-sm btn-outline-info ms-1 share-btn" data-id="{{ device.id }}">Share</button>
+
+	      <a href="{{ url_for('edit_device', device_id=device.id) }}"
+	         class="btn btn-sm btn-outline-warning ms-1">Edit</a>
+
+	      <form action="{{ url_for('delete_device', device_id=device.id) }}"
+	            method="POST" style="display:inline;">
+	        <button type="submit"
+	                class="btn btn-sm btn-outline-danger"
+	                onclick="return confirm('Are you sure?');">
+	          Delete
+	        </button>
+	      </form>
+	    </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class="alert alert-info text-center shadow-sm animate__animated animate__fadeIn">
+      <i class="bi bi-info-circle-fill"></i> No devices found.
+      Add one using the <b>Add Device</b> button above.
+    </div>
+  {% endif %}
+</div>
+
+<!-- ✅ Add Device Modal -->
+<div class="modal fade" id="addDeviceModal" tabindex="-1">
+  <div class="modal-dialog">
+    <form method="POST" action="{{ url_for('add_device') }}">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Add Device</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">Device Name</label>
+            <input type="text" class="form-control" name="device_name" placeholder="Enter device name" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Device IMEI</label>
+            <input type="text" class="form-control" name="device_imei" placeholder="Enter IMEI number" required>
+          </div>
+          <div class="mb-3">
+    		<label for="device_type" class="form-label">Vehicle Type</label>
+    		<select name="device_type" id="device_type" class="form-select" required>
+          		<option value="car">Car 🚗</option>
+			<option value="bike">Bike 🏍️</option>
+		        <option value="truck">Truck 🚚</option>
+    		</select>
+ 	  </div>
+        </div>
+        <div class="modal-footer">
+          <button type="submit" class="btn btn-success">Add Device</button>
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- JS for Search -->
+<script>
+  document.getElementById("searchBar").addEventListener("input", function () {
+    let query = this.value.toLowerCase();
+    document.querySelectorAll("#devicesTable tbody tr").forEach(row => {
+      row.style.display = row.dataset.name.includes(query) ? "" : "none";
+    });
+  });
+</script>
+<script>
+document.addEventListener('click', async function(e) {
+  if (!e.target.classList.contains('share-btn')) return;
+  const id = e.target.dataset.id;
+  const res = await fetch(`/api/device/share/${id}`, {method: 'POST'});
+  const data = await res.json();
+  if (data.link) {
+    prompt('Share this link (valid 7 days):', data.link);
+  }
+});
+</script>
+
+{% endblock %}

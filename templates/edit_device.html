@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Edit Device{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-6">
+    <div class="card shadow-lg border-0 animate__animated animate__fadeInUp">
+      <div class="card-body p-4">
+        <h2 class="text-center mb-4 text-info fw-bold">Edit Device</h2>
+        <form method="POST">
+          <div class="mb-3">
+            <label for="device_name" class="form-label">Device Name</label>
+            <input type="text" class="form-control" name="device_name" id="device_name" value="{{ device.name }}" required>
+          </div>
+          <div class="mb-3">
+            <label for="type" class="form-label">Vehicle Type</label>
+            <select class="form-select" name="type" id="type">
+              <option value="car" {% if device.type == 'car' %}selected{% endif %}>Car</option>
+              <option value="bike" {% if device.type == 'bike' %}selected{% endif %}>Bike</option>
+              <option value="truck" {% if device.type == 'truck' %}selected{% endif %}>Truck</option>
+            </select>
+          </div>
+          <div class="mb-3">
+            <label for="speed_limit" class="form-label">Speed Limit (km/h)</label>
+            <input type="number" class="form-control" name="speed_limit" id="speed_limit"
+                   value="{{ device.speed_limit or '' }}" placeholder="e.g. 80 (leave empty for no limit)">
+          </div>
+          <button type="submit" class="btn btn-primary w-100">Save Changes</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

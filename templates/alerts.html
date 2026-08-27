@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Alerts{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+  <h2 class="fw-bold text-primary">🔔 Geofence Alerts</h2>
+  <p class="text-muted">Last 100 geofence enter/exit events across all your devices.</p>
+
+  {% if events %}
+  <div class="table-responsive">
+    <table class="table table-hover shadow-sm">
+      <thead class="table-dark">
+        <tr>
+          <th>Time</th>
+          <th>Device</th>
+          <th>Geofence</th>
+          <th>Event</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for e in events %}
+        <tr>
+          <td class="text-muted small">{{ e.timestamp.strftime('%Y-%m-%d %H:%M:%S') if e.timestamp else 'N/A' }}</td>
+          <td>{{ e.device.name if e.device else e.device_id }}</td>
+          <td>{{ e.geofence.name if e.geofence else e.geofence_id }}</td>
+          <td>
+            {% if e.event_type == 'ENTER' %}
+              <span class="badge bg-success">✅ Entered</span>
+            {% else %}
+              <span class="badge bg-danger">🚪 Exited</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+    <p class="text-muted">No geofence events yet.</p>
+  {% endif %}
+</div>
+{% endblock %}

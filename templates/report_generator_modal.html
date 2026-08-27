@@ -1,0 +1,106 @@
+<div class="modal fade" id="reportGeneratorModal" tabindex="-1" aria-labelledby="reportGeneratorModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="reportGeneratorModalLabel">Generate Traccar Report</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <!-- The form action will be set dynamically via JavaScript -->
+            <form id="reportForm" action="#" method="GET">
+                <div class="modal-body">
+                    
+                    <div class="mb-3">
+                        <label for="reportDevice" class="form-label">Select Device</label>
+                        <select id="reportDevice" name="device_id" class="form-select" required>
+                            <option value="" disabled selected>Choose a device...</option>
+                            {% for device in devices %}
+                            <option value="{{ device.traccar_id }}">{{ device.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="startDate" class="form-label">Start Date/Time</label>
+                            <input type="datetime-local" id="startDate" name="from" class="form-control" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="endDate" class="form-label">End Date/Time</label>
+                            <input type="datetime-local" id="endDate" name="to" class="form-control" required>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="reportType" class="form-label">Report Type</label>
+                        <select id="reportType" name="type" class="form-select" required>
+                            <option value="route">Route (Recommended)</option>
+                            <option value="summary">Summary</option>
+                            <option value="events">Events</option>
+                        </select>
+                    </div>
+
+                    <p class="text-danger small" id="dateError" style="display: none;">End time must be after start time.</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="submit" class="btn btn-primary" id="generateReportBtn">Generate Report</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const reportForm = document.getElementById('reportForm');
+    const startDateInput = document.getElementById('startDate');
+    const endDateInput = document.getElementById('endDate');
+    const dateError = document.getElementById('dateError');
+    const reportDeviceSelect = document.getElementById('reportDevice');
+    
+    // Set default dates to today's range
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0);
+    const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59);
+
+    const pad = (num) => String(num).padStart(2, '0');
+    
+    // Function to format Date object into YYYY-MM-DDThh:mm string (required for datetime-local input)
+    function formatDate(date) {
+        return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+    }
+
+    startDateInput.value = formatDate(todayStart);
+    endDateInput.value = formatDate(todayEnd);
+
+
+    reportForm.addEventListener('submit', function(e) {
+        const startDate = new Date(startDateInput.value);
+        const endDate = new Date(endDateInput.value);
+        const deviceId = reportDeviceSelect.value;
+        const reportType = document.getElementById('reportType').value;
+
+        // 1. Basic Date Validation
+        if (startDate >= endDate) {
+            e.preventDefault();
+            dateError.style.display = 'block';
+            return;
+        }
+        dateError.style.display = 'none';
+
+        // 2. Format Dates for Traccar (ISO 8601 with Z for UTC)
+        // Convert local time inputs to UTC time strings ending in Z
+        const formattedFrom = startDate.toISOString().replace(/\.\d{3}Z$/, '.000Z');
+        const formattedTo = endDate.toISOString().replace(/\.\d{3}Z$/, '.000Z');
+
+        // 3. Construct the final Flask URL and submit the form
+        // We use a dummy ID (123) and replace it because url_for requires it.
+        const redirectUrl = `{{ url_for('traccar.embedded_traccar', page_type='reports', device_id=123) }}`
+                            .replace('/123', `/${deviceId}`);
+
+        reportForm.action = `${redirectUrl}?from=${formattedFrom}&to=${formattedTo}&type=${reportType}`;
+        
+        // Let the form submit normally after setting the action
+    });
+});
+</script>

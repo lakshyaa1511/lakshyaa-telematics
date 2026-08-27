@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Sign In — Lakshyaa Fleet OS{% endblock %}
+
+{% block auth_content %}
+<div class="card fleet-card p-4 p-md-5 shadow-lg border-subtle" style="width: 100%; max-width: 440px;">
+  <div class="text-center mb-4">
+    <div class="brand-icon-wrapper mx-auto mb-3" style="width: 48px; height: 48px; font-size: 1.5rem;">
+      <i class="bi bi-radar"></i>
+    </div>
+    <h3 class="fw-bold text-white mb-1">Lakshyaa Telematics</h3>
+    <p class="text-muted small">Enterprise Fleet Management OS</p>
+  </div>
+
+  <form method="POST" action="{{ url_for('login') }}">
+    <div class="mb-3">
+      <label class="form-label">Operator Username or Email</label>
+      <div class="input-group">
+        <span class="input-group-text bg-surface border-subtle text-muted"><i class="bi bi-person"></i></span>
+        <input type="text" class="form-control" name="username" placeholder="dhyey / operator" required autofocus>
+      </div>
+    </div>
+
+    <div class="mb-3">
+      <div class="d-flex justify-content-between align-items-center mb-1">
+        <label class="form-label mb-0">Password</label>
+        <a href="{{ url_for('forgot_password') if 'forgot_password' in url_map_rules else '#' }}" class="text-primary text-decoration-none small">Forgot?</a>
+      </div>
+      <div class="input-group">
+        <span class="input-group-text bg-surface border-subtle text-muted"><i class="bi bi-lock"></i></span>
+        <input type="password" class="form-control" name="password" placeholder="••••••••" required>
+      </div>
+    </div>
+
+    <div class="mb-4 form-check">
+      <input type="checkbox" class="form-check-input" id="rememberMe" name="remember" checked>
+      <label class="form-check-label text-muted small" for="rememberMe">Remember terminal session</label>
+    </div>
+
+    <button type="submit" class="btn btn-fleet-primary w-100 py-2 fw-bold">Sign In to Command Center</button>
+  </form>
+
+  <div class="text-center mt-4 pt-3 border-top border-subtle">
+    <span class="text-muted small">Need an enterprise account? </span>
+    <a href="{{ url_for('register') }}" class="text-primary fw-semibold small text-decoration-none">Register Fleet</a>
+  </div>
+</div>
+{% endblock %}

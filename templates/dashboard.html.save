@@ -1,0 +1,266 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+<div class="container mt-4">
+
+    <div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="fw-bold text-primary">Your Devices</h2>
+    <div class="d-flex">
+      <input id="searchBar" type="text" class="form-control me-2 shadow-sm"
+             placeholder="🔍 Search devices...">
+      <button class="btn btn-success rounded-3 shadow-sm"
+              data-bs-toggle="modal" data-bs-target="#addDeviceModal">
+        <i class="bi bi-plus-circle"></i> Add Device
+      </button>
+    </div>
+  </div>
+
+<!-- TRACCAR DEVICES TABLE -->
+<h3>Traccar Devices Available for Linking</h3>
+<!-- This loop now uses the 'traccar_devices' variable -->
+{% if traccar_devices %}
+<table class="table table-striped table-hover small shadow-sm rounded-3 overflow-hidden">
+  <thead class="bg-light">
+    <tr><th>Name</th><th>UniqueId (IMEI)</th><th>Status</th><th>Last Update</th><th>Linked</th><th>Action</th></tr>
+  </thead>
+  <tbody>
+  {% for d in traccar_devices %}
+    <tr>
+      <td>{{ d.name }}</td>
+      <td>{{ d.uniqueId }}</td>
+      <td><span class="badge bg-{% if d.status == 'online' %}success{% elif d.status == 'offline' %}danger{% else %}secondary{% endif %}">{{ d.status or "unknown" }}</span></td>
+      <td>{{ d.lastUpdate or "-" }}</td>
+      <td>{% if d.linked %}✅ Linked{% else %}—{% endif %}</td>
+      <td>
+        {% if not d.linked %}
+        <!-- This link assumes you have a route 'link_traccar_device' in app.py -->
+        <form method="post" action="{{ url_for('link_traccar_device') }}">
+          <input type="hidden" name="traccar_id" value="{{ d.traccar_id }}">
+          <input type="hidden" name="uniqueId" value="{{ d.uniqueId }}">
+          <input type="hidden" name="name" value="{{ d.name }}">
+          <button class="btn btn-sm btn-primary" type="submit" title="Link this Traccar device to your local account">Link</button>
+        </form>
+        {% else %}
+        <!-- This link assumes you have a route 'map_device' -->
+        <a class="btn btn-sm btn-secondary" href="{{ url_for('dashboard') }}">View</a>
+        {% endif %}
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+  <p class="alert alert-warning">No Traccar devices found or could not fetch them. Please check Traccar connection details.</p>
+{% endif %}
+
+
+<hr class="my-5">
+
+<!-- LOCAL DEVICE GRID AND MODALS -->
+<h3>Your Linked Devices</h3>
+<div class="row" id="devicesGrid">
+<!-- This loop now uses the 'devices' variable -->
+{% for device in devices %}
+  <!-- Card for each device -->
+  <div class="col-md-4 mb-4 device-card" data-name="{{ device.name|lower }}">
+    <div class="card shadow-sm h-100 border-0 hover-card">
+      <div class="card-body">
+        <h5 class="card-title d-flex justify-content-between align-items-center">
+          {{ device.name }}
+          <!-- Uses the 'is_online' property calculated in app.py -->
+          {% if device.is_online %} 
+           <span class="badge bg-success">● Online</span>
+          {% else %}
+           <span class="badge bg-danger">● Offline</span>
+          {% endif %}
+        </h5>
+
+        <p class="card-text text-muted mb-1 small">
+        <i class="bi bi-cpu-fill"></i> Local ID: {{ device.id }}
+        </p>
+        <p class="card-text text-muted small">
+        <i class="bi bi-clock"></i>
+        <!-- Uses the 'last_location.timestamp' property calculated in app.py -->
+        Last seen: {{ device.last_location.timestamp if device.last_location }}
+        </p>
+
+       <!--<div class="d-flex justify-content-between mt-3">
+        {% if device.traccar_id %}
+            <!-- Show Map button ONLY if traccar_id exists 
+	    <a href="{{ url_for('traccar.embedded_traccar_map', device_id=device.traccar_id) }}"
+               class="btn btn-sm btn-outline-success" title="View Live Map (Traccar)"><i class="bi bi-map"></i> Map</a>
+
+        <!-- This link points to your local device history page 
+	    <a href="{{ url_for('traccar.embedded_traccar_map', device_id=device.traccar_id, show_history=1) }}"
+	       class="btn btn-sm btn-outline-info" title="View History (Traccar)"><i class="bi bi-clock-history"></i> History</a>
+
+ 	{% else %}
+        <!--Show a disabled button if traccar_id is missing 
+            <button class="btn btn-sm btn-outline-secondary disabled" title="Map unavailable: Device >
+                <i class="bi bi-map"></i> Map N/A
+            </button>
+	    <button class="btn btn-sm btn-outline-secondary disabled" title="History unavailable: Device not found on Traccar.">
+                <i class="bi bi-clock-history"></i> History N/A
+            </button>
+        {% endif %}
+  
+        <button class="btn btn-sm btn-outline-warning"
+                data-bs-toggle="modal" data-bs-target="#editDeviceModal{{ device.id }}">
+        <i class="bi bi-pencil-square"></i> Edit
+        </button>
+        <button class="btn btn-sm btn-outline-danger"
+                data-bs-toggle="modal" data-bs-target="#deleteDeviceModal{{ device.id }}">
+          <i class="bi bi-trash"></i> Delete
+        </button>
+       </div>-->
+       <!-- In templates/dashboard.html -->
+
+       <div class="d-flex justify-content-between mt-3">
+          {% if device.traccar_id %}
+              <!-- MAP BUTTON: Links to the correct embedded_traccar_map route -->
+              <a href="{{ url_for('traccar.embedded_traccar', page_type='map', device_id=device.traccar_id) }}"
+                 class="btn btn-sm btn-outline-success" title="View Live Map (Traccar)"><i class="bi bi-map"></i> Map</a>
+
+              <!-- HISTORY BUTTON: Links to the correct embedded_traccar_map route with history flag -->
+              <a href="{{ url_for('traccar.embedded_traccar', page_type='history', device_id=device.traccar_id, show_history=1) }}"
+                 class="btn btn-sm btn-outline-info" title="View History (Traccar)"><i class="bi bi-clock-history"></i> History</a>
+           
+          {% else %}
+              <!-- If device is not found on Traccar (traccar_id is None) -->
+              <button class="btn btn-sm btn-outline-secondary disabled" title="Map unavailable: Device not found on Traccar.">
+                  <i class="bi bi-map"></i> Map N/A
+              </button>
+              <button class="btn btn-sm btn-outline-secondary disabled" title="History unavailable: Device not found on Traccar.">
+                  <i class="bi bi-clock-history"></i> History N/A
+              </button>
+          {% endif %}
+
+          <button class="btn btn-sm btn-outline-warning"
+                  data-bs-toggle="modal" data-bs-target="#editDeviceModal{{ device.id }}">
+          <i class="bi bi-pencil-square"></i> Edit
+          </button>
+          <button class="btn btn-sm btn-outline-danger"
+                  data-bs-toggle="modal" data-bs-target="#deleteDeviceModal{{ device.id }}">
+          <i class="bi bi-trash"></i> Delete
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+    <!-- EDIT MODAL (Inside the loop) -->
+    <div class="modal fade" id="editDeviceModal{{ device.id }}" tabindex="-1">
+      <div class="modal-dialog">
+        <form method="POST" action="{{ url_for('edit_device', device_id=device.id) }}">
+          <div class="modal-content">
+            <div class="modal-header bg-warning text-white">
+              <h5 class="modal-title">Edit Device: {{ device.name }}</h5>
+              <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+              <div class="mb-3">
+                <label class="form-label">Device Name</label>
+                <input type="text" class="form-control" name="name" value="{{ device.name }}" required>
+              </div>
+              <div class="mb-3">
+                <label for="type" class="form-label">Vehicle Type</label>
+                  <select name="type" id="type" class="form-select">
+                    <option value="car" {% if device.type == 'car' %}selected{% endif %}>Car 🚗</option>
+                    <option value="bike" {% if device.type == 'bike' %}selected{% endif %}>Bike 🏍️</option>
+                    <option value="truck" {% if device.type == 'truck' %}selected{% endif %}>Truck 🚚</option>
+                  </select>
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button type="submit" class="btn btn-warning">Save Changes</button>
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- DELETE MODAL (Inside the loop) -->
+    <div class="modal fade"id="deleteDeviceModal{{ device.id }}" tabindex="-1">
+      <div class="modal-dialog">
+        <form method="POST" action="{{ url_for('delete_device', device_id=device.id) }}">
+          <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+              <h5 class="modal-title">Delete Device</h5>
+              <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+              <p>Are you sure you want to delete <strong>{{ device.name }}</strong>? This action is irreversible.</p>
+            </div>
+            <div class="modal-footer">
+              <button type="submit" class="btn btn-danger">Yes, Delete</button>
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+{% endfor %}
+</div>
+
+{% if not devices %}
+<div class="alert alert-info text-center shadow-sm">
+  <i class="bi bi-info-circle-fill"></i> No devices yet. Add one using the <b>Add Device</b> button above.
+</div>
+{% endif %}
+
+<!-- ADD DEVICE MODAL (Correctly outside the loop) -->
+<div class="modal fade" id="addDeviceModal" tabindex="-1">
+  <div class="modal-dialog">
+    <form method="POST" action="{{ url_for('add_device') }}">
+      <div class="modal-content shadow">
+        <div class="modal-header bg-success text-white">
+          <h5 class="modal-title"><i class="bi bi-plus-circle"></i> Add Device</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">Device Name</label>
+            <input type="text" class="form-control" name="device_name" placeholder="Enter device name" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Device IMEI (Unique ID)</label>
+            <input type="text" class="form-control" name="device_imei" placeholder="Enter 15-digit IMEI" maxlength="15" required>
+            <small class="text-muted">Must match the IMEI used in your Traccar server.</small>
+          </div>
+           <div class="mb-3">
+             <label for="device_type" class="form-label">Vehicle Type</label>
+             <select name="device_type" id="device_type" class="form-select" required>
+                <option value="car">Car 🚗</option>
+                <option value="bike">Bike 🏍️</option>
+                <option value="truck">Truck 🚚</option>
+              </select>
+           </div>
+        </div>
+        <div class="modal-footer">
+          <button type="submit" class="btn btn-success">Add Device</button>
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<style>
+  .hover-card { transition: transform 0.2s, box-shadow 0.2s; }
+  .hover-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 6px 15px rgba(0,0,0,0.2);
+  }
+</style>
+<script>
+  // Device Search
+  document.getElementById("searchBar").addEventListener("input", function () {
+    let query = this.value.toLowerCase();
+    document.querySelectorAll(".device-card").forEach(card => {
+      // Assuming data-name attribute holds the lowercase device name
+      card.style.display = card.dataset.name.includes(query) ? "block" : "none";
+    });
+  });
+</script>
+{% endblock %}

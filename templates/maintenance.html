@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+{% block title %}Fleet Maintenance{% endblock %}
+{% block page_title %}Preventive Maintenance & Service Records{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3">
+  <div>
+    <h5 class="fw-bold text-white mb-1">Fleet Service & Maintenance Hub</h5>
+    <span class="text-muted small">Schedule oil changes, tire rotations, brake overhauls, and fitness certificate renewals</span>
+  </div>
+  <button class="btn btn-fleet-primary d-flex align-items-center gap-2" data-bs-toggle="modal" data-bs-target="#addServiceModal">
+    <i class="bi bi-plus-lg"></i> Schedule Service
+  </button>
+</div>
+
+<!-- Maintenance Logs Table -->
+<div class="fleet-card overflow-hidden">
+  <div class="p-3 border-bottom border-subtle d-flex justify-content-between align-items-center">
+    <h6 class="fw-bold text-white mb-0"><i class="bi bi-tools text-primary me-2"></i> Upcoming & Historical Maintenance Schedules</h6>
+    <span class="badge bg-surface-elevated text-muted small mono-num">{{ logs|length }} Logs</span>
+  </div>
+
+  <div class="table-responsive">
+    <table class="table-fleet mb-0">
+      <thead>
+        <tr>
+          <th>Asset</th>
+          <th>Service Required</th>
+          <th>Due Mileage (km)</th>
+          <th>Target Date</th>
+          <th>Status</th>
+          <th>Est. Cost</th>
+          <th class="text-end">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for log in logs %}
+        <tr>
+          <td>
+            <strong class="text-white">{{ log.device.name }}</strong>
+            <div class="text-muted mono-num small">{{ log.device.plate_number or 'N/A' }}</div>
+          </td>
+          <td><span class="fw-semibold text-white">{{ log.service_type }}</span></td>
+          <td><span class="mono-num text-muted">{{ log.odometer_due_km|round(0) if log.odometer_due_km else '—' }} km</span></td>
+          <td><span class="mono-num text-muted">{{ log.date_due.strftime("%d %b %Y") if log.date_due else '—' }}</span></td>
+          <td>
+            {% if log.status == 'completed' %}
+              <span class="badge bg-success bg-opacity-25 text-success">Completed</span>
+            {% elif log.status == 'overdue' %}
+              <span class="badge bg-danger bg-opacity-25 text-danger">Overdue</span>
+            {% else %}
+              <span class="badge bg-warning bg-opacity-25 text-warning">Scheduled</span>
+            {% endif %}
+          </td>
+          <td><span class="mono-num text-white">${{ log.cost|round(2) }}</span></td>
+          <td class="text-end">
+            <form method="POST" action="{{ url_for('delete_maintenance_log', log_id=log.id) }}" style="display: inline;" onsubmit="return confirm('Delete service record?');">
+              <button type="submit" class="btn btn-sm btn-fleet-secondary text-danger"><i class="bi bi-trash"></i></button>
+            </form>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="7" class="text-center py-5 text-muted">
+            <i class="bi bi-tools fs-1 d-block mb-2"></i>
+            No maintenance records found. Schedule your first maintenance log above.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Modal: Schedule Service -->
+<div class="modal fade" id="addServiceModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <form method="POST" action="{{ url_for('create_maintenance_log') }}">
+        <div class="modal-header">
+          <h5 class="modal-title fw-bold text-white"><i class="bi bi-tools text-primary me-2"></i> Schedule Maintenance Log</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">Select Vehicle</label>
+            <select name="device_id" class="form-select" required>
+              {% for d in devices %}
+              <option value="{{ d.id }}">{{ d.name }} ({{ d.plate_number or 'No Plate' }})</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Service Type</label>
+            <select name="service_type" class="form-select" required>
+              <option value="Engine Oil & Filter Change">Engine Oil & Filter Change 🛢️</option>
+              <option value="Brake System Inspection / Pads">Brake System Inspection / Pads 🛑</option>
+              <option value="Tire Replacement & Wheel Alignment">Tire Replacement & Wheel Alignment 🛞</option>
+              <option value="Battery & Electrical Inspection">Battery & Electrical Inspection 🔋</option>
+              <option value="Commercial Fitness Certificate Renewal">Commercial Fitness Certificate Renewal 📄</option>
+              <option value="Comprehensive Insurance Renewal">Comprehensive Insurance Renewal 🛡️</option>
+            </select>
+          </div>
+          <div class="row">
+            <div class="col-md-6 mb-3">
+              <label class="form-label">Due Odometer (km)</label>
+              <input type="number" step="any" class="form-control mono-num" name="odometer_due_km" placeholder="e.g. 50000">
+            </div>
+            <div class="col-md-6 mb-3">
+              <label class="form-label">Estimated Cost ($)</label>
+              <input type="number" step="any" class="form-control mono-num" name="cost" value="0.0">
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-fleet-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-fleet-primary">Save Schedule</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

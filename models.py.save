@@ -1,0 +1,64 @@
+# models.py
+from flask_sqlalchemy import SQLAlchemy
+from datetime import datetime, timedelta
+import secrets
+
+db = SQLAlchemy()
+
+class User(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(150), unique=True, nullable=False)
+    email = db.Column(db.String(254), unique=True, nullable=False)
+    password = db.Column(db.String(200), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    is_verified = db.Column(db.Boolean, default=False, nullable=False)
+
+    devices = db.relationship("Device", backref="user", lazy=True)
+    otps = db.relationship("OTP", backref="user", lazy=True)
+    reset_tokens = db.relationship("PasswordResetToken", backref="user", lazy=True)
+
+
+class Device(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(150), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+
+    locations = db.relationship("Location", backref="device", lazy=True)
+
+
+class Location(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    latitude = db.Column(db.Float, nullable=False)
+    longitude = db.Column(db.Float, nullable=False)
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+    device_id = db.Column(db.Integer, db.ForeignKey("device.id"), nullable=False)
+
+
+class OTP(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    code = db.Column(db.String(12), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    expires_at = db.Column(db.DateTime, nullable=False)
+    used = db.Column(db.Boolean, default=False, nullable=False)
+
+    @classmethod
+    def create_for_user(cls, user_id, expiry_minutes=10):
+        code = secrets.token_hex(3)  # 6 hex chars -> reasonably short
+        expires = datetime.utcnow() + timedelta(minutes=expiry_minutes)
+        return cls(user_id=user_id, code=code, expires_at=expires)
+
+
+class PasswordResetToken(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    token = db.Column(db.String(64), unique=True, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    used = db.Column(db.Boolean, default=False, nullable=False)
+    expires_at = db.Column(db.DateTime, nullable=False)
+
+    @classmethod
+    def create(cls, user_id, expires_minutes=30):
+        token = secrets.token_hex(32)
+        expires = datetime.utcnow() + timedelta(minutes=expires_minutes)
+        return cls(user_id=user_id, token=token, expires_at=expires)

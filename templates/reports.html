@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+{% block title %}Reports{% endblock %}
+{% block content %}
+<div class="container mt-4">
+  <h2 class="fw-bold text-primary">📊 Trip Reports</h2>
+  <p class="text-muted">Daily distance, speed and activity summary per device.</p>
+
+  <div class="row mb-4">
+    <div class="col-md-4">
+      <label class="form-label">Select Device</label>
+      <select id="deviceSelect" class="form-select">
+        {% for d in devices %}
+          <option value="{{ d.id }}">{{ d.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-3">
+      <label class="form-label">Period</label>
+      <select id="periodSelect" class="form-select">
+        <option value="7">Last 7 days</option>
+        <option value="14">Last 14 days</option>
+        <option value="30">Last 30 days</option>
+      </select>
+    </div>
+    <div class="col-md-2 d-flex align-items-end">
+      <button class="btn btn-primary w-100" onclick="loadReport()">Generate</button>
+    </div>
+  </div>
+
+  <div id="summary" class="row mb-4 d-none">
+    <div class="col-md-3">
+      <div class="card text-center shadow-sm">
+        <div class="card-body">
+          <h5 class="text-muted">Total Distance</h5>
+          <h3 id="totalDistance" class="fw-bold text-primary">—</h3>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="card text-center shadow-sm">
+        <div class="card-body">
+          <h5 class="text-muted">Max Speed</h5>
+          <h3 id="maxSpeed" class="fw-bold text-danger">—</h3>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="card text-center shadow-sm">
+        <div class="card-body">
+          <h5 class="text-muted">Active Days</h5>
+          <h3 id="activeDays" class="fw-bold text-success">—</h3>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="card text-center shadow-sm">
+        <div class="card-body">
+          <h5 class="text-muted">Total Points</h5>
+          <h3 id="totalPoints" class="fw-bold text-warning">—</h3>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="reportTable" class="d-none">
+    <h5 class="fw-semibold mb-3">Daily Breakdown</h5>
+    <div class="table-responsive">
+      <table class="table table-hover shadow-sm">
+        <thead class="table-dark">
+          <tr>
+            <th>Date</th>
+            <th>Distance (km)</th>
+            <th>Moving (min)</th>
+            <th>Idle (min)</th>
+            <th>Max Speed (km/h)</th>
+            <th>Location Points</th>
+          </tr>
+        </thead>
+        <tbody id="reportBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <p id="noData" class="text-muted d-none">No data found for this period.</p>
+</div>
+
+<script>
+async function loadReport() {
+  const deviceId = document.getElementById('deviceSelect').value;
+  const period = document.getElementById('periodSelect').value;
+
+  const res = await fetch(`/api/reports/${deviceId}?period=${period}`);
+  const data = await res.json();
+
+  if (!data.daily || data.daily.length === 0) {
+    document.getElementById('noData').classList.remove('d-none');
+    document.getElementById('summary').classList.add('d-none');
+    document.getElementById('reportTable').classList.add('d-none');
+    return;
+  }
+
+  // Summary
+  const totalDist = data.daily.reduce((s, d) => s + d.distance_km, 0).toFixed(2);
+  const maxSpd = Math.max(...data.daily.map(d => d.max_speed));
+  document.getElementById('totalDistance').textContent = totalDist + ' km';
+  document.getElementById('maxSpeed').textContent = maxSpd + ' km/h';
+  document.getElementById('activeDays').textContent = data.daily.length;
+  document.getElementById('totalPoints').textContent = data.total_points;
+  document.getElementById('summary').classList.remove('d-none');
+
+  // Table
+  const tbody = document.getElementById('reportBody');
+  tbody.innerHTML = '';
+  data.daily.forEach(d => {
+    tbody.innerHTML += `
+      <tr>
+        <td>${d.date}</td>
+        <td>${d.distance_km} km</td>
+        <td>${d.moving_minutes} min</td>
+        <td>${d.idle_minutes} min</td>
+        <td>${d.max_speed} km/h</td>
+        <td>${d.points}</td>
+      </tr>`;
+  });
+  document.getElementById('reportTable').classList.remove('d-none');
+  document.getElementById('noData').classList.add('d-none');
+}
+</script>
+{% endblock %}
+

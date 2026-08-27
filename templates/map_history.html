@@ -1,0 +1,343 @@
+{% extends "base.html" %}
+{% block title %}History - {{ device.name }}{% endblock %}
+
+{% block content %}
+
+<div class="container mt-4">
+<div class="card shadow-lg border-0">
+<div class="card-header d-flex justify-content-between align-items-center">
+<h4 class="mb-0">📍 Trip History - <span class="text-primary">{{ device.name }}</span></h4>
+<span id="modeBadge" class="badge bg-secondary">History Mode</span>
+</div>
+<div class="card-body p-0">
+<div id="map" style="height: 600px; border-radius: 0 0 10px 10px;"></div>
+</div>
+</div>
+
+<!-- --- ROUTE SETTINGS AND CONTROLS --- -->
+
+<div class="card shadow-lg border-0 p-4 mt-4">
+<h5 class="card-title">Route Settings</h5>
+
+<div class="row g-3 align-items-end">
+  <!-- From Date -->
+  <div class="col-md-3 col-6">
+    <label for="fromDate" class="form-label">From Date</label>
+    <!-- Using native date/time inputs ensures correct formatting -->
+    <input type="date" class="form-control" id="fromDate" value="{{ today_date }}">
+  </div>
+  <!-- From Time -->
+  <div class="col-md-3 col-6">
+    <label for="fromTime" class="form-label">From Time</label>
+    <input type="time" class="form-control" id="fromTime" value="00:00">
+  </div>
+  <!-- To Date -->
+  <div class="col-md-3 col-6">
+    <label for="toDate" class="form-label">To Date</label>
+    <input type="date" class="form-control" id="toDate" value="{{ today_date }}">
+  </div>
+  <!-- To Time -->
+  <div class="col-md-3 col-6">
+    <label for="toTime" class="form-label">To Time</label>
+    <input type="time" class="form-control" id="toTime" value="23:59">
+  </div>
+</div>
+
+<!-- Load Route Button and Indicator -->
+<div class="d-flex flex-wrap gap-3 align-items-center justify-content-center mt-4">
+  <button id="loadRouteBtn" class="btn btn-primary btn-lg px-4">
+    <i class="bi bi-geo-alt"></i> Load Route
+  </button>
+
+  <!-- Loading Indicator -->
+  <div id="loadingIndicator" style="display: none;" class="d-flex align-items-center text-primary">
+      <div class="spinner-border spinner-border-sm me-2" role="status">
+          <span class="visually-hidden">Loading...</span>
+      </div>
+      <strong>Loading...</strong>
+  </div>
+</div>
+
+
+</div>
+
+<!-- PLAYBACK CONTROLS -->
+
+<div class="card shadow-lg border-0 p-4 mt-4">
+<div class="d-flex flex-column flex-md-row align-items-center justify-content-center gap-4">
+
+  <!-- Speed Control -->
+  <div class="flex-grow-1 w-100 w-md-auto">
+    <label class="form-label fw-bold">Playback Speed (<span id="speedValue">1x</span>)</label>
+    <input type="range" class="form-range" min="0.5" max="5" step="0.5" id="speedControl" value="1">
+  </div>
+
+  <!-- Playback Buttons -->
+  <div class="btn-group" role="group">
+    <button id="playBtn" class="btn btn-success">
+      <i class="bi bi-play-fill"></i> Play
+    </button>
+    <button id="pauseBtn" class="btn btn-warning">
+      <i class="bi bi-pause-fill"></i> Pause
+    </button>
+    <button id="resetBtn" class="btn btn-secondary">
+      <i class="bi bi-arrow-counterclockwise"></i> Reset
+    </button>
+  </div>
+
+  <!-- Live Mode Toggle -->
+  <button id="liveToggle" class="btn btn-info ms-md-auto">
+    <i class="bi bi-broadcast"></i> Enable Live Mode
+  </button>
+</div>
+
+
+</div>
+<!-- --- END ROUTE SETTINGS AND CONTROLS --- -->
+
+<!-- Download Buttons -->
+
+<div class="text-center mt-4">
+<a href="{{ url_for('download_csv', device_id=device.id) }}" class="btn btn-outline-primary">
+<i class="bi bi-file-earmark-spreadsheet"></i> Download CSV
+</a>
+<a href="{{ url_for('download_pdf', device_id=device.id) }}" class="btn btn-outline-danger">
+<i class="bi bi-file-earmark-pdf"></i> Download PDF
+</a>
+<form method="POST" action="{{ url_for('clear_history', device_id=device.id) }}" class="d-inline-block ms-3">
+<button type="button" class="btn btn-danger" onclick="showCustomConfirm('Are you sure you want to clear this device&#39;s trip history?', this.form);">
+<i class="bi bi-trash"></i> Clear History
+</button>
+</form>
+</div>
+</div>
+
+<!-- Leaflet Core CSS and JS FIRST -->
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+<!-- Leaflet Plugins (MUST load after Leaflet Core) -->
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet.fullscreen/Control.FullScreen.css" />
+<script src="https://unpkg.com/leaflet.fullscreen/Control.FullScreen.js"></script>
+
+<!-- THIS IS THE FIX: Using a reliable, specific version for locate control -->
+
+<link rel="stylesheet" href="https://www.google.com/search?q=https://cdnjs.cloudflare.com/ajax/libs/leaflet-locatecontrol/0.74.0/L.Control.Locate.min.css" />
+<script src="https://www.google.com/search?q=https://cdnjs.cloudflare.com/ajax/libs/leaflet-locatecontrol/0.74.0/L.Control.Locate.min.js"></script>
+
+<!-- Custom Modal for Alerts/Confirms -->
+
+<div class="modal fade" id="customModal" tabindex="-1" aria-labelledby="customModalLabel" aria-hidden="true">
+<div class="modal-dialog">
+<div class="modal-content">
+<div class="modal-header">
+<h5 class="modal-title" id="customModalLabel">Message</h5>
+<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+</div>
+<div class="modal-body" id="customModalBody">
+<!-- Content inserted here -->
+</div>
+<div class="modal-footer" id="customModalFooter">
+<!-- Buttons inserted here -->
+</div>
+</div>
+</div>
+</div>
+
+<script>
+const deviceId = {{ device.id }};
+let map, polyline, marker, path = [], index = 0, interval, isPlaying = false;
+let playbackSpeed = 1000;
+
+// --- Element References ---
+const fromDateEl = document.getElementById('fromDate');
+const fromTimeEl = document.getElementById('fromTime');
+const toDateEl = document.getElementById('toDate');
+const toTimeEl = document.getElementById('toTime');
+const loadRouteBtn = document.getElementById('loadRouteBtn');
+const loadingIndicator = document.getElementById('loadingIndicator');
+
+// --- Utility Functions ---
+
+function showCustomAlert(message) {
+const modalEl = new bootstrap.Modal(document.getElementById('customModal'));
+document.getElementById('customModalLabel').innerText = 'Alert';
+document.getElementById('customModalBody').innerText = message;
+document.getElementById('customModalFooter').innerHTML = '<button type="button" class="btn btn-primary" data-bs-dismiss="modal">OK</button>';
+modalEl.show();
+}
+
+function showCustomConfirm(message, form) {
+const modalEl = new bootstrap.Modal(document.getElementById('customModal'));
+document.getElementById('customModalLabel').innerText = 'Confirm Action';
+document.getElementById('customModalBody').innerText = message;
+document.getElementById('customModalFooter').innerHTML = &lt;button type=&quot;button&quot; class=&quot;btn btn-secondary&quot; data-bs-dismiss=&quot;modal&quot;&gt;Cancel&lt;/button&gt; &lt;button type=&quot;button&quot; class=&quot;btn btn-danger&quot; id=&quot;modalConfirmBtn&quot;&gt;Clear History&lt;/button&gt;;
+
+  const confirmBtn = document.getElementById(&#39;modalConfirmBtn&#39;);
+  confirmBtn.onclick = () =&gt; {
+      form.submit();
+      modalEl.hide();
+  };
+  
+  modalEl.show();
+
+
+}
+
+// --- Map Initialization ---
+map = L.map("map", { fullscreenControl: true }).setView([20.5937, 78.9629], 5); // Center on India
+L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+attribution: "&copy; OpenStreetMap contributors"
+}).addTo(map);
+
+// FIX: L.control.locate must be called after the L.Control.Locate.min.js script has loaded.
+// By placing it here, inside the main script, it runs correctly.
+L.control.locate({ position: "topleft", strings: { title: "Show my location" } }).addTo(map);
+
+var carIcon = L.icon({
+iconUrl: "https://cdn-icons-png.flaticon.com/512/743/743922.png",
+iconSize: [35, 35],
+iconAnchor: [17, 35],
+popupAnchor: [0, -30]
+});
+
+polyline = L.polyline([], { color: "blue" }).addTo(map);
+
+// --- CORE FUNCTION: LOADS HISTORY ROUTE ---
+async function loadRoute() {
+// 1. Get the date/time values from the inputs
+const fromTimeIso = ${fromDateEl.value}T${fromTimeEl.value}:00.000Z;
+const toTimeIso = ${toDateEl.value}T${toTimeEl.value}:00.000Z;
+
+// Reset map state
+pauseRoute();
+path = [];
+index = 0;
+polyline.setLatLngs([]);
+if (marker) map.removeLayer(marker);
+marker = null;
+
+if (loadingIndicator) loadingIndicator.style.display = &#39;flex&#39;;
+loadRouteBtn.disabled = true;
+
+try {
+  // 2. Call the Flask API endpoint
+  const res = await fetch(`/api/traccar/route/${deviceId}?from=${fromTimeIso}&amp;to=${toTimeIso}`);
+  
+  if (!res.ok) {
+    // Handle HTTP error responses
+    const errorData = await res.json().catch(() =&gt; ({ error: `HTTP error! Status: ${res.status} and response was not JSON.` }));
+    throw new Error(errorData.error || `Failed to fetch data with status: ${res.status}`);
+  }
+
+  const data = await res.json();
+
+  if (data.length === 0) {
+    showCustomAlert(&quot;No route data found for the selected time range. Please check your dates and device activity in Traccar.&quot;);
+    return;
+  }
+
+  // 3. Process and draw the route
+  path = data.map(d =&gt; [d.latitude, d.longitude]);
+  
+  path.forEach(latlng =&gt; {
+    polyline.addLatLng(latlng);
+  });
+
+  // Initialize marker at the start of the path
+  const startPoint = path[0];
+  marker = L.marker(startPoint, { icon: carIcon }).addTo(map)
+    .bindPopup(`&lt;strong&gt;{{ device.name }}&lt;/strong&gt;<br>Start of Trip: ${new Date(data[0].serverTime).toLocaleString()}`);
+  
+  // Fit the map to the new route
+  map.fitBounds(polyline.getBounds(), { padding: [50, 50] });
+
+  // Start playback automatically
+  playRoute();
+
+} catch (error) {
+  // Display the error caught from the Flask endpoint or fetch
+  showCustomAlert(`Failed to load route: ${error.message}. Please try logging out and logging back in to renew your Traccar session.`);
+  console.error(&quot;Route loading failed:&quot;, error);
+} finally {
+  if (loadingIndicator) loadingIndicator.style.display = &#39;none&#39;;
+  loadRouteBtn.disabled = false;
+}
+
+
+}
+
+// --- Playback Controls ---
+function playRoute() {
+if (!path.length || isPlaying) return;
+isPlaying = true;
+clearInterval(interval);
+
+if (index &gt;= path.length) index = 0; // Restart if finished
+
+interval = setInterval(() =&gt; {
+  if (index &gt;= path.length) {
+    pauseRoute();
+    // Use the last known position&#39;s serverTime for the end message
+    const lastPosition = path[path.length - 1];
+    if (marker) {
+      // If marker exists, move it to the final point and update popup
+      marker.setLatLng(lastPosition); 
+      marker.getPopup().setContent(`&lt;strong&gt;{{ device.name }}&lt;/strong&gt;<br>Trip Finished!`);
+      marker.openPopup();
+    }
+    return;
+  }
+  marker.setLatLng(path[index]);
+  index++;
+}, playbackSpeed);
+
+
+}
+
+function pauseRoute() {
+isPlaying = false;
+clearInterval(interval);
+}
+
+function resetRoute() {
+pauseRoute();
+index = 0;
+if (marker && path.length) {
+marker.setLatLng(path[0]);
+marker.getPopup().setContent(&lt;strong&gt;{{ device.name }}&lt;/strong&gt;<br>Start of Trip);
+}
+}
+
+// --- Event Handlers ---
+loadRouteBtn.onclick = loadRoute;
+document.getElementById("playBtn").onclick = playRoute;
+document.getElementById("pauseBtn").onclick = pauseRoute;
+document.getElementById("resetBtn").onclick = resetRoute;
+
+// Speed control
+document.getElementById("speedControl").oninput = (e) => {
+const val = e.target.value;
+playbackSpeed = 1000 / val;
+document.getElementById("speedValue").innerText = val + "x";
+if (isPlaying) playRoute();
+};
+
+// Live toggle (placeholder logic)
+document.getElementById("liveToggle").onclick = () => {
+showCustomAlert("Live Mode functionality needs to be implemented separately. Currently focusing on history playback.");
+};
+
+// Legend
+var legend = L.control({ position: "bottomright" });
+legend.onAdd = function () {
+var div = L.DomUtil.create("div", "card p-2 shadow-sm");
+div.innerHTML = &lt;strong&gt;Legend&lt;/strong&gt;<br> &lt;img src=&quot;https://cdn-icons-png.flaticon.com/512/743/743922.png&quot; width=&quot;20&quot;&gt; Vehicle<br> 🔵 Route;
+return div;
+};
+legend.addTo(map);
+</script>
+
+{% endblock %}

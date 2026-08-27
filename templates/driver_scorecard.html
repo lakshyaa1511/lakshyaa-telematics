@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+{% block title %}Driver Safety Scorecard{% endblock %}
+{% block page_title %}Driver Behavior & Safety Analytics{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3">
+  <div>
+    <h5 class="fw-bold text-white mb-1">Driver Performance & Safety Index</h5>
+    <span class="text-muted small">Monitor harsh acceleration, abrupt braking, excessive idling, and overall safety rating</span>
+  </div>
+</div>
+
+<!-- Overview Stats -->
+<div class="row g-3 mb-4">
+  <div class="col-6 col-lg-3">
+    <div class="kpi-widget" style="--kpi-accent: #10b981; --kpi-bg: rgba(16, 185, 129, 0.12);">
+      <div class="d-flex justify-content-between align-items-start mb-2">
+        <div class="kpi-label">Fleet Safety Score</div>
+        <div class="kpi-icon-box"><i class="bi bi-shield-check"></i></div>
+      </div>
+      <div class="kpi-value text-success mono-num">94<span class="fs-6 text-muted">/100</span></div>
+      <div class="text-success small mt-1"><i class="bi bi-arrow-up-right me-1"></i> Grade A (Low Risk)</div>
+    </div>
+  </div>
+
+  <div class="col-6 col-lg-3">
+    <div class="kpi-widget" style="--kpi-accent: #f59e0b; --kpi-bg: rgba(245, 158, 11, 0.12);">
+      <div class="d-flex justify-content-between align-items-start mb-2">
+        <div class="kpi-label">Harsh Braking Events</div>
+        <div class="kpi-icon-box"><i class="bi bi-exclamation-triangle"></i></div>
+      </div>
+      <div class="kpi-value text-warning mono-num">{{ harsh_brakes_count or 0 }}</div>
+      <div class="text-muted small mt-1">Past 7 days</div>
+    </div>
+  </div>
+
+  <div class="col-6 col-lg-3">
+    <div class="kpi-widget" style="--kpi-accent: #f43f5e; --kpi-bg: rgba(244, 63, 94, 0.12);">
+      <div class="d-flex justify-content-between align-items-start mb-2">
+        <div class="kpi-label">Overspeeding Incidents</div>
+        <div class="kpi-icon-box"><i class="bi bi-speedometer"></i></div>
+      </div>
+      <div class="kpi-value text-danger mono-num">{{ overspeed_count or 0 }}</div>
+      <div class="text-muted small mt-1">Speed &gt; 80 km/h</div>
+    </div>
+  </div>
+
+  <div class="col-6 col-lg-3">
+    <div class="kpi-widget" style="--kpi-accent: #3b82f6; --kpi-bg: rgba(59, 130, 246, 0.12);">
+      <div class="d-flex justify-content-between align-items-start mb-2">
+        <div class="kpi-label">Active Drivers</div>
+        <div class="kpi-icon-box"><i class="bi bi-people-fill"></i></div>
+      </div>
+      <div class="kpi-value mono-num">{{ drivers|length }}</div>
+      <div class="text-muted small mt-1">Assigned to fleet</div>
+    </div>
+  </div>
+</div>
+
+<!-- Driver Leaderboard Table -->
+<div class="fleet-card overflow-hidden">
+  <div class="p-3 border-bottom border-subtle d-flex justify-content-between align-items-center">
+    <h6 class="fw-bold text-white mb-0"><i class="bi bi-trophy-fill text-warning me-2"></i> Driver Safety Ranking</h6>
+    <span class="badge bg-surface-elevated text-muted small">Updated Real-Time</span>
+  </div>
+
+  <div class="table-responsive">
+    <table class="table-fleet mb-0">
+      <thead>
+        <tr>
+          <th>Driver Name</th>
+          <th>Assigned Vehicle</th>
+          <th>Safety Score</th>
+          <th>Safety Grade</th>
+          <th>Harsh Events</th>
+          <th>Top Speed Logged</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for d in drivers %}
+        <tr>
+          <td>
+            <div class="d-flex align-items-center gap-2">
+              <div class="user-avatar bg-primary" style="width: 32px; height: 32px; font-size: 0.8rem;">
+                {{ d.driver_name[0]|upper if d.driver_name else 'U' }}
+              </div>
+              <div>
+                <div class="fw-bold text-white">{{ d.driver_name or 'Unassigned Driver' }}</div>
+                <div class="text-muted small mono-num">{{ d.driver_phone or 'No phone' }}</div>
+              </div>
+            </div>
+          </td>
+          <td>
+            <span class="text-white">{{ d.name }}</span>
+            <span class="text-muted mono-num small">({{ d.plate_number or 'N/A' }})</span>
+          </td>
+          <td>
+            <div class="d-flex align-items-center gap-2">
+              <div class="progress flex-grow-1" style="height: 6px; width: 80px; background: var(--bg-surface-elevated);">
+                <div class="progress-bar bg-success" style="width: {{ d.safety_score or 95 }}%;"></div>
+              </div>
+              <span class="mono-num fw-bold text-white">{{ d.safety_score or 95 }}/100</span>
+            </div>
+          </td>
+          <td><span class="badge bg-success bg-opacity-25 text-success">Grade A+</span></td>
+          <td><span class="mono-num text-muted">0 events</span></td>
+          <td><span class="mono-num text-info fw-semibold">{{ d.last_speed|round(1) }} km/h</span></td>
+          <td><span class="status-pill {{ d.status }}">{{ d.status }}</span></td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="7" class="text-center py-5 text-muted">
+            <i class="bi bi-people fs-1 d-block mb-2"></i>
+            No active drivers found. Assign drivers to your vehicles in the Assets page.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
