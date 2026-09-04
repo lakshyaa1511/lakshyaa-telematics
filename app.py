@@ -335,9 +335,17 @@ def register():
             return redirect(url_for("register"))
 
         hashed = generate_password_hash(password)
-        user = User(username=username, email=email, password=hashed, is_verified=False)
+        # If SMTP is configured, require verification; otherwise auto-verify for instant onboarding
+        smtp_configured = bool(os.environ.get("SMTP_HOST") and os.environ.get("SMTP_USER"))
+        user = User(username=username, email=email, password=hashed, is_verified=not smtp_configured)
         db.session.add(user)
         db.session.commit()
+
+        if not smtp_configured:
+            session['user_id'] = user.id
+            session['username'] = user.username
+            flash("Welcome to Lakshyaa FleetFlow! Account created and activated.", "success")
+            return redirect(url_for("dashboard"))
 
         # create OTP
         otp_entry = OTP.create_for_user(user.id, expiry_minutes=10)
