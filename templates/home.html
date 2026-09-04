@@ -1,11 +1,83 @@
-home.html
 {% extends "base.html" %}
-{% block content %}
-<div class="text-center">
-    <h1 class="mt-5">Welcome to GPS Tracker</h1>
-    <p class="lead">Track your devices in real time.</p>
-    {% if not logged_in %}
-        <a href="{{ url_for('register') }}" class="btn btn-primary">Get Started</a>
-    {% endif %}
+{% block title %}Lakshyaa Telematics — Next-Gen Fleet Intelligence OS{% endblock %}
+
+{% block auth_content %}
+<div class="container py-5">
+  <!-- Hero Section -->
+  <div class="row justify-content-center text-center mb-5">
+    <div class="col-12 col-lg-9">
+      <!-- Live Status Pill -->
+      <div class="d-inline-flex align-items-center gap-2 px-3 py-1 rounded-pill mb-4" 
+           style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.25);">
+        <span class="pulse-dot"></span>
+        <span class="text-success small fw-semibold" style="letter-spacing: 0.04em;">ENTERPRISE TELEMATICS CLOUD &bull; LIVE 24/7</span>
+      </div>
+
+      <!-- Main Headline -->
+      <h1 class="display-4 fw-extrabold text-white mb-3" style="letter-spacing: -0.03em; font-weight: 800;">
+        Real-Time Fleet Telematics &amp; Autonomous Logistics Command
+      </h1>
+
+      <p class="lead text-secondary mb-4 mx-auto" style="max-width: 720px; font-size: 1.15rem; line-height: 1.6;">
+        Track commercial fleets with millisecond precision, automate geofence security corridors, monitor driver safety metrics, and dispatch Uber-style client live tracking links with zero friction.
+      </p>
+
+      <!-- Action Buttons -->
+      <div class="d-flex flex-wrap justify-content-center gap-3 mb-5">
+        <a href="{{ url_for('login') }}" class="btn btn-fleet-primary px-4 py-3 fw-bold fs-6 d-inline-flex align-items-center gap-2 shadow-lg">
+          <i class="bi bi-speedometer2 fs-5"></i>
+          <span>Enter Command Center</span>
+        </a>
+        <a href="{{ url_for('register') }}" class="btn btn-fleet-secondary px-4 py-3 fw-semibold fs-6 d-inline-flex align-items-center gap-2">
+          <i class="bi bi-shield-plus fs-5"></i>
+          <span>Create Fleet Account</span>
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Feature Cards Grid -->
+  <div class="row g-4 justify-content-center">
+    <div class="col-12 col-md-4">
+      <div class="fleet-card p-4 h-100">
+        <div class="brand-icon-wrapper mb-3" style="background: rgba(59, 130, 246, 0.15); color: #3b82f6;">
+          <i class="bi bi-radar"></i>
+        </div>
+        <h5 class="fw-bold text-white mb-2">Live Spatial Radar</h5>
+        <p class="text-secondary small mb-0">
+          Smooth compass-heading vehicle rotation (0–360°), live speedometers, and sub-second ingestion for physical GPS hardware.
+        </p>
+      </div>
+    </div>
+
+    <div class="col-12 col-md-4">
+      <div class="fleet-card p-4 h-100">
+        <div class="brand-icon-wrapper mb-3" style="background: rgba(16, 185, 129, 0.15); color: #10b981;">
+          <i class="bi bi-bounding-box-circles"></i>
+        </div>
+        <h5 class="fw-bold text-white mb-2">Smart Corridor Geofences</h5>
+        <p class="text-secondary small mb-0">
+          Automated circular and polygon safe zones with automated alerts triggered the moment an asset breaches defined boundaries.
+        </p>
+      </div>
+    </div>
+
+    <div class="col-12 col-md-4">
+      <div class="fleet-card p-4 h-100">
+        <div class="brand-icon-wrapper mb-3" style="background: rgba(139, 92, 246, 0.15); color: #8b5cf6;">
+          <i class="bi bi-share-fill"></i>
+        </div>
+        <h5 class="fw-bold text-white mb-2">Uber-Style Client Links</h5>
+        <p class="text-secondary small mb-0">
+          Generate secure, tokenized shipment tracking URLs for consignees and clients. Real-time ETA without requiring app install or login.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer Tag -->
+  <div class="text-center mt-5 pt-4 border-top border-subtle">
+    <span class="text-muted small">&copy; 2026 Lakshyaa Telematics Systems. Built for Enterprise Fleet &amp; Logistics.</span>
+  </div>
 </div>
 {% endblock %}

@@ -303,7 +303,9 @@ def inject_unread_alerts():
 
 @app.route("/")
 def home():
-    return render_template("home.html", logged_in=('user_id' in session))
+    if "user_id" in session:
+        return redirect(url_for("dashboard"))
+    return render_template("home.html")
 
 
 @app.route("/register", methods=["GET", "POST"])
