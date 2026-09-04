@@ -236,6 +236,13 @@ app.register_blueprint(traccar, url_prefix="/traccar")
 app.permanent_session_lifetime = timedelta(minutes=30)
 
 db.init_app(app)
+
+# Ensure database tables exist upon startup (crucial for production / Gunicorn)
+with app.app_context():
+    try:
+        db.create_all()
+    except Exception as e:
+        app.logger.warning(f"db.create_all error: {e}")
 migrate = Migrate(app, db)
 print("SMTP DEBUG:", os.environ.get("SMTP_HOST"), os.environ.get("SMTP_USER"))
 
