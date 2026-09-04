@@ -344,7 +344,7 @@ def register():
         if not smtp_configured:
             session['user_id'] = user.id
             session['username'] = user.username
-            flash("Welcome to Lakshyaa FleetFlow! Account created and activated.", "success")
+            flash("Welcome to Lakshyaa! Account created and activated.", "success")
             return redirect(url_for("dashboard"))
 
         # create OTP

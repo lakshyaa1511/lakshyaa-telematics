@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{% block title %}Lakshyaa Telematics{% endblock %} — Enterprise Fleet OS</title>
+  <title>{% block title %}Lakshyaa{% endblock %} — Enterprise Fleet OS</title>
 
   <!-- Google Fonts: Plus Jakarta Sans & JetBrains Mono -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -32,7 +32,7 @@
       </div>
       <div>
         <div class="brand-title">Lakshyaa</div>
-        <div class="brand-subtitle">Telematics OS</div>
+        <div class="brand-subtitle">Fleet OS</div>
       </div>
     </div>
 
@@ -186,7 +186,9 @@
 {% else %}
 <!-- Unauthenticated Auth View Wrapper -->
 <div class="container-fluid min-vh-100 d-flex flex-column justify-content-center align-items-center p-3" style="background: radial-gradient(circle at 50% 30%, #1e293b 0%, #0a0e17 100%);">
-  {% block auth_content %}{% endblock %}
+  {% block auth_content %}
+    {% block content %}{% endblock %}
+  {% endblock %}
 </div>
 {% endif %}
 
